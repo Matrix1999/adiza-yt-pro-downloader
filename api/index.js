@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const yts = require('yt-search');
 const YTDlpWrap = require('yt-dlp-wrap').default;
-const ffmpeg = require('ffmpeg-static');
+const ffmpeg =require('ffmpeg-static');
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -16,25 +16,42 @@ const tempDir = '/tmp';
 const ytDlpBinaryPath = path.join(rootDir, 'yt-dlp');
 const ytDlpWrap = new YTDlpWrap(ytDlpBinaryPath);
 
-// --- NEW HELPER FUNCTION ---
-// This function reliably extracts the YouTube video ID from any URL format.
 function getYoutubeVideoId(url) {
   const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[7].length === 11) ? match[7] : null;
 }
 
-// Root endpoint for API documentation
 app.get('/api', (req, res) => {
   res.status(200).json({
     status: "online",
     message: "Welcome to the Adiza-YT-Pro-Downloader API!",
     author: "Matrix1999",
-    // ... (rest of the JSON is the same)
+    usage: {
+      endpoint: "/api/download",
+      method: "GET",
+      parameters: {
+        url: {
+          type: "string",
+          required: true,
+          description: "A valid YouTube video URL.",
+        },
+        format: {
+          type: "string",
+          required: false,
+          default: "mp3",
+          options: ["mp3", "mp4"],
+          description: "The desired download format.",
+        },
+      },
+      example: {
+        mp3: "/api/download?url=YOUTUBE_URL&format=mp3",
+        mp4: "/api/download?url=YOUTUBE_URL&format=mp4",
+      },
+    },
   });
 });
 
-// Download endpoint
 app.get('/api/download', async (req, res) => {
   const { url, format = 'mp3' } = req.query;
 
@@ -43,8 +60,6 @@ app.get('/api/download', async (req, res) => {
   }
 
   try {
-    // --- THE FIX IS HERE ---
-    // We now use our reliable helper function instead of the incorrect yts.getVideoID
     const videoId = getYoutubeVideoId(url);
     if (!videoId) throw new Error('Invalid or unsupported YouTube URL');
 
@@ -72,15 +87,33 @@ app.get('/api/download', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${videoInfo.title}.${format}"`);
     const fileStream = fs.createReadStream(outputFilePath);
     
+    // Pipe the file to the response.
     fileStream.pipe(res);
 
+    // Clean up the file after the download is finished.
     fileStream.on('close', () => {
-      fs.unlinkSync(outputFilePath);
+      fs.unlink(outputFilePath, (err) => {
+        if (err) {
+          console.error('Failed to delete temporary file:', err);
+        }
+      });
+    });
+
+    // Handle any errors from the stream itself.
+    fileStream.on('error', (err) => {
+      console.error('Stream Error:', err);
+      // THE FIX IS HERE (Part 1) - Check if headers are already sent
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream the file.' });
+      }
     });
     
   } catch (error) {
     console.error('API Error:', error);
-    res.status(500).json({ error: 'Failed to process the download.', details: error.message });
+    // THE FIX IS HERE (Part 2) - Check if headers are already sent
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process the download.', details: error.message });
+    }
   }
 });
 
