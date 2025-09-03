@@ -4,13 +4,5 @@
       "memory": 1024,
       "maxDuration": 300
     }
-  },
-  "builds": [
-    {
-      "use": "@vercel/node"
-    },
-    {
-      "use": "vercel-ffmpeg"
-    }
-  ]
+  }
 }
