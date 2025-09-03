@@ -1,0 +1,15 @@
+// File: vercel.json
+
+{
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 300
+    }
+  },
+  "build": {
+    "env": {
+      "FFMPEG_PATH": "/usr/bin/ffmpeg"
+    }
+  }
+}
