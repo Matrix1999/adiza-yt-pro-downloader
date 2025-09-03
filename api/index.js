@@ -1,53 +1,72 @@
-module.exports = async (req, res) => {
-    // Set CORS headers for all responses
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// File: api/index.js
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const yts = require('yt-search');
+const YTDlpWrap = require('yt-dlp-wrap').default;
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// --- Define file paths for the Vercel environment ---
+const rootDir = path.resolve(process.cwd());
+// Vercel's serverless functions can write to the /tmp directory
+const tempDir = '/tmp'; 
+
+// Initialize yt-dlp
+const ytDlpBinaryPath = path.join(rootDir, 'yt-dlp');
+const ytDlpWrap = new YTDlpWrap(ytDlpBinaryPath);
+
+// --- The Main API Endpoint ---
+app.get('/api/download', async (req, res) => {
+  const { url, format = 'mp3' } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ error: 'Missing "url" parameter.' });
+  }
+
+  try {
+    const videoInfo = await yts({ videoId: yts.getVideoID(url) });
+    const outputFileName = `${videoInfo.videoId}.${format}`;
+    const outputFilePath = path.join(tempDir, outputFileName);
+    const cookiesFilePath = path.join(rootDir, 'cookies.txt');
+
+    let dlpArgs = [
+      url,
+      '--cookies', cookiesFilePath,
+      '--no-mtime',
+      '-o', outputFilePath,
+    ];
+
+    if (format === 'mp4') {
+      dlpArgs.push('-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    } else {
+      dlpArgs.push('-f', 'bestaudio[ext=m4a]', '--extract-audio', '--audio-format', 'mp3');
     }
-    
-    const { url: videoUrl } = req.query;
 
-    if (!videoUrl || !videoUrl.includes('youtu')) {
-        return res.status(400).json({ status: 'error', message: 'Invalid or missing YouTube URL.' });
-    }
+    // Execute yt-dlp and wait for it to finish
+    await ytDlpWrap.execPromise(dlpArgs);
 
-    try {
-        // --- 1. Call the public Cobalt API ---
-        // This is a stable, open-source API that is less likely to be blocked.
-        const cobaltApiResponse = await fetch('https://co.wuk.sh/api/json', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                url: videoUrl,
-                isAudioOnly: true // We only want the MP3 audio
-            })
-        });
+    // --- Stream the file back to the user ---
+    // This avoids loading the whole file into memory, which is crucial for serverless environments.
+    res.setHeader('Content-Disposition', `attachment; filename="${videoInfo.title}.${format}"`);
+    const fileStream = fs.createReadStream(outputFilePath);
+    fileStream.pipe(res);
 
-        if (!cobaltApiResponse.ok) {
-            throw new Error(`The Cobalt API returned an error: ${cobaltApiResponse.statusText}`);
-        }
+    // Clean up the temporary file after the stream is finished
+    fileStream.on('close', () => {
+      fs.unlinkSync(outputFilePath);
+    });
 
-        const result = await cobaltApiResponse.json();
+  } catch (error) {
+    console.error('API Error:', error);
+    res.status(500).json({ error: 'Failed to process the download.', details: error.message });
+  }
+});
 
-        // --- 2. Check for a successful conversion ---
-        if (result.status !== 'success' || !result.url) {
-            throw new Error(`Conversion failed: ${result.text || 'No download link was returned.'}`);
-        }
-        
-        // --- 3. Success! Send the final JSON response ---
-        // Note: The Cobalt API does not provide a separate title, so your bot will need to use the title from its yt-search result.
-        return res.status(200).json({
-            status: 'success',
-            download_url: result.url,
-        });
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 
-    } catch (error) {
-        return res.status(500).json({ status: 'error', message: error.message });
-    }
-};
+module.exports = app;
