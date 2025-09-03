@@ -1,9 +1,11 @@
+// File: api/index.js
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const yts = require('yt-search');
 const YTDlpWrap = require('yt-dlp-wrap').default;
-const ffmpeg = require('ffmpeg-static'); // <-- Import ffmpeg-static
+const ffmpeg = require('ffmpeg-static');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -11,12 +13,43 @@ const port = process.env.PORT || 3000;
 const rootDir = path.resolve(process.cwd());
 const tempDir = '/tmp'; 
 
-// --- Initialize yt-dlp with the correct ffmpeg path ---
 const ytDlpBinaryPath = path.join(rootDir, 'yt-dlp');
 const ytDlpWrap = new YTDlpWrap(ytDlpBinaryPath);
-ytDlpWrap.setFfmpegPath(ffmpeg); // <-- Set the ffmpeg path from the package
+ytDlpWrap.setFfmpegPath(ffmpeg);
 
-app.get('/api/download', async (req, res) => {
+// --- NEW: Root endpoint for API documentation ---
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: "online",
+    message: "Welcome to the Adiza-YT-Pro-Downloader API!",
+    author: "Matrix1999",
+    usage: {
+      endpoint: "/api/download",
+      method: "GET",
+      parameters: {
+        url: {
+          type: "string",
+          required: true,
+          description: "A valid YouTube video URL.",
+        },
+        format: {
+          type: "string",
+          required: false,
+          default: "mp3",
+          options: ["mp3", "mp4"],
+          description: "The desired download format.",
+        },
+      },
+      example: {
+        mp3: "/api/download?url=YOUTUBE_URL&format=mp3",
+        mp4: "/api/download?url=YOUTUBE_URL&format=mp4",
+      },
+    },
+  });
+});
+
+// --- CORRECTED: Download endpoint ---
+app.get('/download', async (req, res) => {
   const { url, format = 'mp3' } = req.query;
 
   if (!url) {
@@ -62,8 +95,11 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// This part is for local testing; Vercel handles the serverless execution.
+if (process.env.VERCEL !== '1') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
 
 module.exports = app;
