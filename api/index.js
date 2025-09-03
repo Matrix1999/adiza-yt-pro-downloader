@@ -8,17 +8,20 @@ const YTDlpWrap = require('yt-dlp-wrap').default;
 const ffmpeg = require('ffmpeg-static');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8000; // Koyeb uses port 8000 by default
 
 const rootDir = path.resolve(process.cwd());
 const tempDir = '/tmp'; 
 
 const ytDlpBinaryPath = path.join(rootDir, 'yt-dlp');
 const ytDlpWrap = new YTDlpWrap(ytDlpBinaryPath);
-ytDlpWrap.setFfmpegPath(ffmpeg);
 
-// --- NEW: Root endpoint for API documentation ---
-app.get('/', (req, res) => {
+// --- THE FIX IS HERE ---
+// The .setFfmpegPath() method was removed, so we delete that line.
+// We will now pass the ffmpeg path directly in the command arguments.
+
+// Root endpoint for API documentation
+app.get('/api', (req, res) => {
   res.status(200).json({
     status: "online",
     message: "Welcome to the Adiza-YT-Pro-Downloader API!",
@@ -48,8 +51,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// --- CORRECTED: Download endpoint ---
-app.get('/download', async (req, res) => {
+// Download endpoint
+app.get('/api/download', async (req, res) => {
   const { url, format = 'mp3' } = req.query;
 
   if (!url) {
@@ -65,8 +68,11 @@ app.get('/download', async (req, res) => {
     const outputFilePath = path.join(tempDir, outputFileName);
     const cookiesFilePath = path.join(rootDir, 'cookies.txt');
 
+    // --- THE FIX IS HERE ---
+    // We add '--ffmpeg-location' directly to the command arguments.
     let dlpArgs = [
       url,
+      '--ffmpeg-location', ffmpeg,
       '--cookies', cookiesFilePath,
       '--no-mtime',
       '-o', outputFilePath,
@@ -95,11 +101,8 @@ app.get('/download', async (req, res) => {
   }
 });
 
-// This part is for local testing; Vercel handles the serverless execution.
-if (process.env.VERCEL !== '1') {
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-  });
-}
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 
 module.exports = app;
