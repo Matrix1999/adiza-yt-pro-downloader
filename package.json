@@ -1,0 +1,16 @@
+// File: package.json
+
+{
+  "name": "adiza-downloader-api",
+  "version": "1.0.0",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "postinstall": "wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O ./yt-dlp && chmod +x ./yt-dlp"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "yt-search": "^2.10.4",
+    "yt-dlp-wrap": "^2.3.12"
+  }
+}
