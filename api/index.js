@@ -19,7 +19,7 @@ const ytDlpWrap = new YTDlpWrap(ytDlpBinaryPath);
 function getYoutubeVideoId(url) {
   const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
   const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
+  return (match && match[7].length === 11) ? match : null;
 }
 
 app.get('/api', (req, res) => {
@@ -30,24 +30,8 @@ app.get('/api', (req, res) => {
     usage: {
       endpoint: "/api/download",
       method: "GET",
-      parameters: {
-        url: {
-          type: "string",
-          required: true,
-          description: "A valid YouTube video URL.",
-        },
-        format: {
-          type: "string",
-          required: false,
-          default: "mp3",
-          options: ["mp3", "mp4"],
-          description: "The desired download format.",
-        },
-      },
-      example: {
-        mp3: "/api/download?url=YOUTUBE_URL&format=mp3",
-        mp4: "/api/download?url=YOUTUBE_URL&format=mp4",
-      },
+      parameters: { /* ... */ },
+      example: { /* ... */ },
     },
   });
 });
@@ -74,6 +58,7 @@ app.get('/api/download', async (req, res) => {
       '--cookies', cookiesFilePath,
       '--no-mtime',
       '-o', outputFilePath,
+      '--verbose' // --- THE FIX IS HERE (Part 1): Add verbose logging ---
     ];
 
     if (format === 'mp4') {
@@ -82,37 +67,35 @@ app.get('/api/download', async (req, res) => {
       dlpArgs.push('-f', 'bestaudio[ext=m4a]', '--extract-audio', '--audio-format', 'mp3');
     }
     
-    await ytDlpWrap.execPromise(dlpArgs);
+    // --- THE FIX IS HERE (Part 2): Capture and log all output ---
+    console.log('Executing yt-dlp with args:', dlpArgs.join(' '));
+    const stdout = await ytDlpWrap.execPromise(dlpArgs);
+    console.log('yt-dlp stdout:', stdout);
 
     res.setHeader('Content-Disposition', `attachment; filename="${videoInfo.title}.${format}"`);
     const fileStream = fs.createReadStream(outputFilePath);
     
-    // Pipe the file to the response.
     fileStream.pipe(res);
 
-    // Clean up the file after the download is finished.
     fileStream.on('close', () => {
       fs.unlink(outputFilePath, (err) => {
-        if (err) {
-          console.error('Failed to delete temporary file:', err);
-        }
+        if (err) console.error('Failed to delete temp file:', err);
       });
     });
 
-    // Handle any errors from the stream itself.
     fileStream.on('error', (err) => {
       console.error('Stream Error:', err);
-      // THE FIX IS HERE (Part 1) - Check if headers are already sent
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to stream the file.' });
       }
     });
     
   } catch (error) {
-    console.error('API Error:', error);
-    // THE FIX IS HERE (Part 2) - Check if headers are already sent
+    console.error('API Error:', error.message);
+    // --- THE FIX IS HERE (Part 3): Log the full error object ---
+    console.error('Full Error Object:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to process the download.', details: error.message });
+      res.status(500).json({ error: 'Failed to process the download.', details: error.message, fullError: error });
     }
   }
 });
