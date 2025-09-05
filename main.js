@@ -4,7 +4,6 @@ import yts from "npm:yt-search";
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 
-// CORRECTED: Removed TypeScript types
 async function handler(req) {
   if (req.method !== "POST") {
     return new Response("Please use POST method", { status: 405 });
@@ -89,7 +88,6 @@ _Developed by Matrix - King_
   }
 }
 
-// CORRECTED: Removed TypeScript types
 async function sendTelegramMessage(chatId, text, parseMode) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
   const payload = {
@@ -107,6 +105,6 @@ async function sendTelegramMessage(chatId, text, parseMode) {
   });
 }
 
-console.log("Starting server...");
-serve(handler);
-
+// Start the Deno server without the default console log
+console.log("Starting server for Deno Deploy...");
+serve(handler, { onListen: () => {} });
