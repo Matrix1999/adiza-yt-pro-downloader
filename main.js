@@ -2,10 +2,10 @@
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 const WELCOME_IMAGE_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
-const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
-const CHANNEL_URL = "https://t.me/QueenAdiza";
+const OWNER_URL = "https://t.me/Matrix_Zat";
+const CHANNEL_URL = "https://t.me/Matrix_Tech_Updates";
 const SUPPORTED_FORMATS = ["mp3", "144", "240", "360", "480", "720", "1080"];
-const MAX_FILE_SIZE_MB = 30; // Telegram's bot API limit is 50MB
+const MAX_FILE_SIZE_MB = 49; // Telegram's bot API limit is 50MB
 
 // Main handler for all incoming requests from Telegram
 async function handler(req) {
@@ -34,7 +34,6 @@ async function handler(req) {
 
 // --- Logic Handlers ---
 
-// Handles all incoming messages
 async function handleMessage(message) {
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
@@ -55,11 +54,10 @@ async function handleMessage(message) {
       reply_markup: { inline_keyboard: keyboard }
     });
   } else {
-    await sendTelegramMessage(chatId, "Please send me a YouTube link to get started, or use the `/start` command.");
+    await sendTelegramMessage(chatId, "This bot now only accepts direct YouTube links. Please send a valid link to get started, or use the `/start` command.");
   }
 }
 
-// Handles all button clicks
 async function handleCallbackQuery(callbackQuery) {
   const { data, message } = callbackQuery;
   const chatId = message.chat.id;
@@ -91,13 +89,13 @@ async function handleCallbackQuery(callbackQuery) {
     }
   } catch (error) {
     console.error("Download handling error:", error);
-    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while trying to get the file. The link may have expired.");
+    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while trying to get the file. The link may have expired or your API is down.");
   }
 }
 
 // --- Telegram API Helpers ---
 
-async functionapiRequest(method, params = {}) {
+async function apiRequest(method, params = {}) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
   const res = await fetch(url, {
     method: 'POST',
@@ -153,5 +151,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting advanced bot server with direct media sending...");
+console.log("Starting simplified, reliable bot server...");
 Deno.serve(handler);
