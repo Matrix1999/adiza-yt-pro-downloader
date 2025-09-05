@@ -1,14 +1,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import yts from "npm:yt-search";
 
-// --- IMPORTANT CORRECTION ---
-// Get your Telegram bot token from an environment variable named "BOT_TOKEN".
-// Do NOT paste your token directly into the code.
-const BOT_TOKEN = Deno.env.get("8495212213:AAGkx6NJ0slDxpMmD122uz46soLLVS1Ya7c");
+const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 
-// The main function that handles incoming webhook requests
-async function handler(req: Request): Promise<Response> {
+// CORRECTED: Removed TypeScript types
+async function handler(req) {
   if (req.method !== "POST") {
     return new Response("Please use POST method", { status: 405 });
   }
@@ -26,7 +23,6 @@ async function handler(req: Request): Promise<Response> {
       const chatId = message.chat.id;
       const text = message.text;
 
-      // --- ADDED: Handle the /start command ---
       if (text === "/start") {
         const startMessage = `
 *Welcome to the YouTube Downloader Bot!*
@@ -47,7 +43,6 @@ _Developed by Matrix - King_
         `;
         await sendTelegramMessage(chatId, startMessage, "Markdown");
 
-      // Check for the /ytdl command
       } else if (text.startsWith("/ytdl ")) {
         const query = text.substring(5).trim();
         if (!query) {
@@ -94,8 +89,8 @@ _Developed by Matrix - King_
   }
 }
 
-// Function to send a message using the Telegram Bot API
-async function sendTelegramMessage(chatId: number, text: string, parseMode?: string) {
+// CORRECTED: Removed TypeScript types
+async function sendTelegramMessage(chatId, text, parseMode) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
   const payload = {
     chat_id: chatId,
@@ -112,6 +107,6 @@ async function sendTelegramMessage(chatId: number, text: string, parseMode?: str
   });
 }
 
-// Start the Deno server
 console.log("Starting server...");
 serve(handler);
+
