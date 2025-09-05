@@ -3,7 +3,13 @@ import yts from "npm:yt-search";
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 
-// The main handler function, no changes here
+// --- Bot Configuration ---
+const WELCOME_IMAGE_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg"; // URL for your welcome image
+const OWNER_URL = "https://t.me/Matrix_Zat"; // Your Telegram profile link
+const CHANNEL_URL = "https://t.me/QueenAdiza"; 
+const SUPPORTED_FORMATS = ["mp3", "144", "240", "360", "480", "720", "1080"];
+
+// Main handler for all incoming requests from Telegram
 async function handler(req) {
   if (req.method !== "POST") {
     return new Response("Please use POST method", { status: 405 });
@@ -17,67 +23,68 @@ async function handler(req) {
   try {
     const update = await req.json();
 
-    if (update.message && update.message.text) {
+    // Handle button presses (callbacks)
+    if (update.callback_query) {
+      const { data, message } = update.callback_query;
+      const [format, videoUrl] = data.split("|");
+      
+      const downloadUrl = `${YOUR_API_BASE_URL}?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+      const replyText = `✅ *Your direct download link is ready:*\n\n[Click here to download ${format.toUpperCase()}](${downloadUrl})\n\n_Developed by Matrix - King_`;
+      
+      await sendTelegramMessage(message.chat.id, replyText, { parse_mode: "Markdown" });
+      await answerCallbackQuery(update.callback_query.id);
+      return new Response("ok");
+    }
+
+    // Handle regular messages
+    if (update.message) {
       const message = update.message;
       const chatId = message.chat.id;
-      const text = message.text;
+      const text = message.text || "";
+      const user = message.from;
+      const userName = user.first_name || "User";
 
+      // Handle the /start command
       if (text === "/start") {
         const startMessage = `
-*Welcome to the YouTube Downloader Bot!*
+👋 Hello, ${userName}! Welcome to Adiza's YouTube Downloader Bot!
+🌹
 
-To download a video or audio, use the \`/ytdl\` command followed by a song name or a YouTube URL.
+🔑 *Your Telegram ID:* \`${user.id}\`
 
-*Example:*
-\`/ytdl Never Gonna Give You Up\`
+*How to use me:*
+1️⃣ Paste any YouTube video link here.
+2️⃣ Choose your preferred format from the buttons that appear.
 
-or
+💡 *TIP:* This bot uses a free, easy-to-use API for fast YouTube video and audio downloads in various formats!
 
-\`/ytdl https://www.youtube.com/watch?v=dQw4w9WgXcQ\`
-
-The bot will send you direct download links for MP3 audio and 720p video.
-
----
-_Developed by Matrix - King_
+Stay connected:
         `;
-        await sendTelegramMessage(chatId, startMessage, "Markdown");
 
-      } else if (text.startsWith("/ytdl ")) {
-        const query = text.substring(5).trim();
-        if (!query) {
-          await sendTelegramMessage(chatId, "Please provide a song name or YouTube URL after the command.");
-          return new Response("ok");
-        }
-
-        await sendTelegramMessage(chatId, `Searching for "${query}"...`);
-
-        let videoUrl = "";
-        if (query.includes("youtube.com/") || query.includes("youtu.be/")) {
-            videoUrl = query;
-        } else {
-            const searchResult = await yts(query);
-            const firstVideo = searchResult.videos[0];
-            if (!firstVideo) {
-                await sendTelegramMessage(chatId, `Could not find any results for "${query}".`);
-                return new Response("ok");
-            }
-            videoUrl = firstVideo.url;
-        }
+        const inline_keyboard = [
+          [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
+          [{ text: "👑 OWNER 👑", url: OWNER_URL }]
+        ];
         
-        const audioDownloadUrl = `${YOUR_API_BASE_URL}?url=${encodeURIComponent(videoUrl)}&format=mp3`;
-        const videoDownloadUrl = `${YOUR_API_BASE_URL}?url=${encodeURIComponent(videoUrl)}&format=720`;
+        await sendPhoto(chatId, WELCOME_IMAGE_URL, startMessage, { 
+            reply_markup: { inline_keyboard },
+            parse_mode: "Markdown"
+        });
 
-        const replyText = `
-*Download Links Ready!*
+      // Handle YouTube links
+      } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
+        await sendTelegramMessage(chatId, "Fetching download options...");
 
-*Audio (MP3):* [Click here to download](${audioDownloadUrl})
+        const videoUrl = text;
+        const keyboard = createFormatButtons(videoUrl);
+        
+        await sendTelegramMessage(chatId, "Please choose a format to download:", {
+          reply_markup: { inline_keyboard: keyboard }
+        });
 
-*Video (720p):* [Click here to download](${videoDownloadUrl})
-
----
-_Developed by Matrix - King_
-        `;
-        await sendTelegramMessage(chatId, replyText, "Markdown");
+      } else {
+        // Optional: Reply if the message is not a command or a YouTube link
+        await sendTelegramMessage(chatId, "Please send me a YouTube link to get started, or use the /start command.");
       }
     }
 
@@ -88,24 +95,58 @@ _Developed by Matrix - King_
   }
 }
 
-async function sendTelegramMessage(chatId, text, parseMode) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-  const payload = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: parseMode || "",
-  };
+// --- Helper Functions for Telegram API ---
 
+// Creates the grid of format buttons
+function createFormatButtons(videoUrl) {
+    const rows = [];
+    let currentRow = [];
+    SUPPORTED_FORMATS.forEach(format => {
+        currentRow.push({
+            text: format.toUpperCase(),
+            callback_data: `${format}|${videoUrl}`
+        });
+        if (currentRow.length === 3) { // 3 buttons per row
+            rows.push(currentRow);
+            currentRow = [];
+        }
+    });
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+    return rows;
+}
+
+// Sends a text message
+async function sendTelegramMessage(chatId, text, extraParams = {}) {
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
   await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text, ...extraParams }),
   });
 }
 
-// --- KEY CHANGE ---
-// Use the modern, built-in Deno.serve function
-console.log("Starting server with Deno.serve...");
+// Sends a photo with a caption
+async function sendPhoto(chatId, photoUrl, caption, extraParams = {}) {
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, ...extraParams }),
+  });
+}
+
+// Acknowledges a button press
+async function answerCallbackQuery(callbackQueryId) {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callback_query_id: callbackQueryId })
+    });
+}
+
+// Start the Deno server
+console.log("Starting advanced bot server with Deno.serve...");
 Deno.serve(handler);
