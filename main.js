@@ -1,16 +1,16 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import yts from "npm:yt-search";
 
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 
+// The main handler function, no changes here
 async function handler(req) {
   if (req.method !== "POST") {
     return new Response("Please use POST method", { status: 405 });
   }
 
   if (!BOT_TOKEN) {
-    console.error("Error: TELEGRAM_BOT_TOKEN environment variable is not set.");
+    console.error("Error: BOT_TOKEN environment variable is not set.");
     return new Response("Internal Server Error", { status: 500 });
   }
 
@@ -105,6 +105,7 @@ async function sendTelegramMessage(chatId, text, parseMode) {
   });
 }
 
-// Start the Deno server without the default console log
-console.log("Starting server for Deno Deploy...");
-serve(handler, { onListen: () => {} });
+// --- KEY CHANGE ---
+// Use the modern, built-in Deno.serve function
+console.log("Starting server with Deno.serve...");
+Deno.serve(handler);
