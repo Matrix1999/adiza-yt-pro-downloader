@@ -50,7 +50,7 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// --- LOGIC HANDLER (WITH COMMAND FIX) ---
+// --- Logic Handlers ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -86,10 +86,6 @@ Paste a YouTube link or use the buttons below to get started.
             [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
-    } else if (text === "/settings") { // <<< FIX: Handle /settings command
-        await sendSettingsMessage(chatId);
-    } else if (text === "/donate") { // <<< FIX: Handle /donate command
-        await sendDonationMessage(chatId);
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
         if (userQuality) {
@@ -453,5 +449,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v44 - Command Fix)...");
+console.log("Starting Adiza Downloader Bot (v43 - Simple SaveTube MP3 Fix)...");
 Deno.serve(handler);
