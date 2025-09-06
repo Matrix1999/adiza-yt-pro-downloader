@@ -135,6 +135,7 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             return;
         }
+        // This combines all settings-related callbacks into one handler.
         if (action.startsWith("settings") || action.startsWith("back_to_") || action.startsWith("user_") || action.startsWith("set_default") || action.startsWith("help_")) {
             await handleSettingsCallbacks(callbackQuery);
             return;
@@ -216,8 +217,8 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        // --- FIX #1: SKIP FILE SIZE CHECK FOR MP3 ---
-        // The worker fails on HEAD requests for MP3s, so we skip this check for them.
+        // --- START OF THE FIX ---
+        // For MP3s, we skip the HEAD check because the worker doesn't support it.
         if (format !== 'mp3') {
             if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
             const headRes = await fetch(downloadUrl, { method: 'HEAD', signal: controller.signal });
@@ -233,11 +234,13 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
                  return; 
             }
         }
+        // --- END OF THE FIX ---
 
         if (!isInline) await editMessageText(`🚀 Downloading file...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
 
-        // This check is still important to ensure the final download works.
+        // This check is still necessary to catch errors during the actual download.
         if (!fileRes.ok) {
             throw new Error(`Download worker responded with error status: ${fileRes.status}`);
         }
@@ -256,7 +259,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
     } catch (error) {
         if (error.name !== 'AbortError') {
             console.error("Download handling error:", error);
-            const errorMessage = `❌ Sorry, an error occurred.\n<i>${error.message}</i>`;
+            const errorMessage = `❌ Sorry, an error occurred.\n\n<i>${error.message}</i>`;
             if (isInline) await sendTelegramMessage(chatId, errorMessage);
             else if (statusMsg) await editMessageText(errorMessage, { chat_id: chatId, message_id: statusMsg.result.message_id });
         }
@@ -274,27 +277,35 @@ async function handleSettingsCallbacks(callbackQuery) {
     const messageId = message.message_id;
     const userId = from.id;
 
-    if (action === "settings_menu") {
-        await answerCallbackQuery(callbackQuery.id);
-        await deleteMessage(chatId, messageId); 
-        await sendSettingsMessage(chatId);
-    } else if (action === "settings_quality") {
-        const userQuality = (await kv.get(["users", userId, "quality"])).value;
-        await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
-    } else if (action === "set_default") {
-        payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
-        await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
-        const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
-        await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
-    } else if (action === "user_stats") {
-        const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
-        await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
-    } else if (action === "back_to_settings") {
-        await sendSettingsMessage(chatId, messageId, true);
-    } else if (action === "help_menu") {
-        // --- FIX #2: RESTORED YOUR ORIGINAL HELP TEXT ---
-        const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
-        await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+    // Use a switch for cleaner logic
+    switch(action) {
+        case "settings_menu":
+            await answerCallbackQuery(callbackQuery.id);
+            await deleteMessage(chatId, messageId); 
+            await sendSettingsMessage(chatId);
+            break;
+        case "settings_quality":
+            const userQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
+            break;
+        case "set_default":
+            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
+            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
+            break;
+        case "user_stats":
+            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            break;
+        case "back_to_settings":
+            await sendSettingsMessage(chatId, messageId, true);
+            break;
+        case "help_menu":
+            // --- FIX #2: RESTORED YOUR ORIGINAL HELP TEXT ---
+            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
+            await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            break;
     }
 }
 
@@ -423,5 +434,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v39 - Patched HEAD Check)...");
+console.log("Starting Adiza Downloader Bot (v40 - Final Patch)...");
 Deno.serve(handler);
