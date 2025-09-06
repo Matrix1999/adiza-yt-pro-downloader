@@ -69,8 +69,14 @@ async function handleMessage(message) {
 
     // --- Admin Commands ---
     if (userId === ADMIN_ID) {
-        if (command === "/broadcast") { await handleBroadcast(message, payload); return; }
-        if (command === "/grant_premium") { await grantPremiumAccess(message, payload); return; }
+        if (command === "/broadcast") {
+            await handleBroadcast(message, payload);
+            return;
+        }
+        if (command === "/grant_premium") {
+            await grantPremiumAccess(message, payload);
+            return;
+        }
     }
 
     // --- User Commands ---
@@ -156,7 +162,7 @@ async function handleStart(message, referrerId) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Use /help to see all commands.
+Send a YouTube link or use /help to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -166,7 +172,7 @@ Use /help to see all commands.
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
 }
 
-async function handleSearch(chatId, query) {
+async function handleSearch(chatId, query, userId) {
     await sendTelegramMessage(chatId, `🔍 Searching for: <b>${query}</b>...`);
     const searchResults = await searchYoutube(query);
     if (!searchResults || searchResults.length === 0) {
@@ -191,24 +197,33 @@ async function sendReferralMessage(chatId, userId) {
     const credits = user.premium_credits || 0;
     const nextCreditProgress = referrals % REFERRAL_GOAL;
 
-    let status = `Progress to next credit: ${nextCreditProgress}/${REFERRAL_GOAL}`;
+    let status = `Progress to next credit: ${nextCreditProgress}/${REFERRAL_GOAL} 🔄`;
     if (premiumInfo.expires_at > Date.now()) {
         const expiryDate = new Date(premiumInfo.expires_at).toLocaleString();
-        status = `<b>Active Premium:</b> Expires on ${expiryDate}`;
+        status = `<b>Active Premium:</b> Expires on ${expiryDate} ⏳`;
     }
 
     let message = `
-🤝 <b>Invite & Earn Premium Credits!</b>
-Share your unique link. For every <b>${REFERRAL_GOAL} friends</b> who join, you'll earn <b>1 Premium Credit</b>.
-Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of 1080p downloads.
-<b>Your Status:</b>
-- Total Referrals: ${referrals}
-- Premium Credits Available: ${credits}
-- ${status}
-Your personal link:
+🎉  <b>Invite Friends & Earn Premium!</b>
+
+Share your unique link. For every <b>${REFERRAL_GOAL} friends</b> who join, you'll get <b>1 Premium Credit</b>.
+
+Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 1080p downloads.
+
+📊  <b>Your Status</b>
+    - Total Referrals: ${referrals}
+    - Premium Credits: ${credits} ⭐
+    - ${status}
+
+👇 Tap the button below or copy this link:
 <code>${referralLink}</code>
     `;
-    await sendTelegramMessage(chatId, message.trim(), {});
+    
+    const inline_keyboard = [
+        [{ text: "📲 Share Your Link", switch_inline_query: `Join me on this awesome bot! ${referralLink}` }]
+    ];
+    
+    await sendTelegramMessage(chatId, message.trim(), { reply_markup: { inline_keyboard }});
 }
 
 async function requestFeedback(chatId, userId) {
