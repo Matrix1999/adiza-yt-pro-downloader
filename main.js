@@ -6,7 +6,15 @@ const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
-const FETCH_TIMEOUT_MS = 45000; // 45 seconds timeout for downloads
+
+// --- NEW: Array of Welcome Sticker File IDs ---
+const WELCOME_STICKER_IDS = [
+    "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE",
+    "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
+    "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ",
+    "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
+    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE"
+];
 
 // --- Main Request Handler ---
 async function handler(req) {
@@ -33,11 +41,17 @@ async function handleMessage(message) {
   const text = (message.text || "").trim();
 
   if (text === "/start") {
+    // --- Send a random welcome sticker ---
+    if (WELCOME_STICKER_IDS.length > 0) {
+        const randomStickerId = WELCOME_STICKER_IDS[Math.floor(Math.random() * WELCOME_STICKER_IDS.length)];
+        await sendSticker(chatId, randomStickerId);
+    }
+    
     const user = message.from;
     const welcomeMessage = `
 👋 <b>Hello, ${user.first_name}! Welcome to Adiza YouTube Downloader!</b> 🌹
 
-Paste a YouTube link to get started.
+Paste a YouTube link to get started or use /settings to customize your experience.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -45,6 +59,10 @@ Paste a YouTube link to get started.
     ];
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
+  } else if (text === "/settings") {
+    const settingsMessage = "⚙️ *User Settings*\n\n_This feature is coming soon! You will be able to customize your default download quality and more._";
+    await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown' });
+
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
     const keyboard = createFormatButtons(text);
     await sendTelegramMessage(chatId, "Please choose a format to download:", {
@@ -62,72 +80,48 @@ async function handleCallbackQuery(callbackQuery) {
   const [format, videoUrl] = data.split("|");
   
   await answerCallbackQuery(callbackQuery.id, `Processing ${format.toUpperCase()}...`);
-  const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size and duration...</i>`);
+  const statusMsg = await sendTelegramMessage(chatId, `<i>⏳ Processing request...</i>`);
 
   try {
+    await editMessageText(chatId, statusMsg.result.message_id, `<i>🔎 Analyzing link...</i>`);
     const info = await getVideoInfo(videoUrl);
     const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
-    const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
 
-    // Use fetch with a timeout
-    const fileRes = await fetchWithTimeout(downloadUrl, { method: 'GET' }, FETCH_TIMEOUT_MS);
-    
-    // Since we're streaming, we can't know the size beforehand easily.
-    // Let's download the blob and then check its size.
-    const fileBlob = await fileRes.blob();
-    const fileSizeMB = fileBlob.size / (1024 * 1024);
+    const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+    await editMessageText(chatId, statusMsg.result.message_id, `<i>💾 Checking file size...</i>`);
+    const headRes = await fetch(downloadUrl, { method: 'HEAD' });
+    const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
+    const fileSizeMB = contentLength / (1024 * 1024);
 
     if (fileSizeMB > 0 && fileSizeMB < MAX_FILE_SIZE_MB) {
-      await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ File is ${fileSizeMB.toFixed(2)}MB. Uploading to Telegram...</i>`);
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>🚀 Downloading to our server...</i>`);
+      const fileRes = await fetch(downloadUrl);
+      const fileBlob = await fileRes.blob();
+      
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ Uploading to you...</i>`);
       
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
       const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       
-      await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded by Adiza Bot`, fileName, safeTitle);
+      await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      // File is too large or download timed out.
-      sendLargeFileLink(chatId, statusMsg.result.message_id, downloadUrl, format, fileSizeMB);
+      const messageText = `
+⚠️ <b>File Too Large for Telegram!</b> ⚠️
+
+The selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
+
+Please use the direct download link below.
+      `;
+      const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
+      const inline_keyboard = [[{ text: `🔗 Download ${formatDisplay} 🔮`, url: downloadUrl }]];
+      await editMessageText(chatId, statusMsg.result.message_id, messageText.trim(), { reply_markup: { inline_keyboard } });
     }
   } catch (error) {
     console.error("Download handling error:", error);
-    if (error.name === 'AbortError') {
-      // This is our timeout error
-      const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
-      sendLargeFileLink(chatId, statusMsg.result.message_id, downloadUrl, format, 0);
-    } else {
-      await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
-    }
+    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
   }
-}
-
-// --- NEW HELPER FUNCTIONS ---
-function sendLargeFileLink(chatId, messageId, downloadUrl, format, fileSizeMB) {
-    const messageText = `
-⚠️ <b>File is Too Large or Taking Too Long!</b> ⚠️
-
-The selected file ${fileSizeMB > 0 ? `(${fileSizeMB.toFixed(2)}MB)` : ''} exceeds Telegram's limits or is too slow to process.
-
-Please use the direct download link below.
-    `;
-    const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
-    const inline_keyboard = [[{
-        text: `🔗 Download ${formatDisplay} 🔮`,
-        url: downloadUrl
-    }]];
-
-    editMessageText(chatId, messageId, messageText.trim(), {
-        reply_markup: { inline_keyboard }
-    });
-}
-
-async function fetchWithTimeout(resource, options = {}, timeout) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    const response = await fetch(resource, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return response;
 }
 
 async function getVideoInfo(youtubeUrl) {
@@ -157,6 +151,10 @@ async function sendPhoto(chatId, photoUrl, caption, extraParams = {}) {
   return await apiRequest('sendPhoto', { chat_id: chatId, photo: photoUrl, caption, parse_mode: 'HTML', ...extraParams });
 }
 
+async function sendSticker(chatId, stickerFileId) {
+    return await apiRequest('sendSticker', { chat_id: chatId, sticker: stickerFileId });
+}
+
 async function editMessageText(chatId, messageId, text, extraParams = {}) {
   return await apiRequest('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', ...extraParams });
 }
@@ -175,10 +173,16 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
     
-    const inline_keyboard = [[
+    let inline_keyboard = [[
         { text: "Share ↪️", switch_inline_query: "" },
         { text: "🔮 More Bots 🔮", url: CHANNEL_URL }
     ]];
+
+    if (type === 'audio' && title) {
+        const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
+        inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
+    }
+    
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
     
     if (type === 'audio') {
@@ -209,5 +213,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v5 with timeout)...");
+console.log("Starting final professional bot server (v6 - Random Stickers)...");
 Deno.serve(handler);
