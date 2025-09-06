@@ -10,7 +10,7 @@ const WELCOME_PHOTO_URLS = [
     "https://files.catbox.moe/u7qhlg.jpg",
     "https://files.catbox.moe/pcla4l.jpg"
 ];
-const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
+export const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
@@ -21,6 +21,9 @@ const PREMIUM_ACCESS_DURATION_DAYS = 7; // 1 credit = 7 days of access
 
 // --- External Libraries ---
 import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
+
+// --- Import Custom Modules ---
+import { handlePremiumHubRequest, handlePremiumServiceCallback } from './premium_hub.js';
 
 // --- Deno KV Database ---
 const kv = await Deno.openKv();
@@ -284,37 +287,6 @@ sᴜᴘᴘᴏʀᴛ ᴛʜᴇ ʙᴏᴛ's ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ ᴀɴᴅ 
     await sendTelegramMessage(chatId, premiumMessage.trim(), { reply_markup: { inline_keyboard }});
 }
 
-async function handlePremiumHubRequest(chatId, userId) {
-    const isPremium = await checkPremium(userId);
-    if (!isPremium) {
-        await sendTelegramMessage(chatId, `
-🔑🚫 <b>Access Denied</b> 🚫🔑
-
-ᴛʜɪs <b>Pᴘʀᴇᴍɪᴜᴍ ʜᴜʙ</b> ɪs ᴇxᴄʟᴜsɪᴠᴇʟʏ ғᴏʀ ᴏᴜʀ 💎ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴍᴇᴍʙᴇʀs💎 ᴡʜᴏ ʜᴀᴠᴇ sᴜᴘᴘᴏʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ᴛʜʀᴏᴜɢʜ ᴀ ᴅᴏɴᴀᴛɪᴏɴ💰.
-
-🐬ᴛᴏ ᴜɴʟᴏᴄᴋ ᴛʜɪs sᴇᴄᴛɪᴏɴ ᴀɴᴅ ᴀʟʟ ғᴜᴛᴜʀᴇ ᴘʀᴇᴍɪᴜᴍ sᴇʀᴠɪᴄᴇs, ᴘʟᴇᴀsᴇ ᴄᴏɴsɪᴅᴇʀ ʙᴇᴄᴏᴍɪɴɢ ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ.
-
-ᴜsᴇ ᴛʜᴇ /premium_member ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ʟᴇᴀʀɴ ᴍᴏʀᴇ.
-        `);
-        return;
-    }
-
-    const premiumHubMessage = `
-⌛💎 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗣𝗢𝗥𝗧𝗔𝗟 💎⌛ 
-
-⚡ᴛʜɪs ɪs ʏᴏᴜʀ ᴄᴇɴᴛʀᴀʟ ᴢᴏɴᴇ ғᴏʀ ᴀʟʟ ᴇxᴄʟᴜsɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴄᴏɴᴛᴇɴᴛ. ᴀs ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ, ʏᴏᴜ ʜᴀᴠᴇ ᴀᴄᴄᴇss to ᴇᴠᴇʀʏᴛʜɪɴɢ ʟɪsᴛᴇᴅ ʙᴇʟᴏᴡ. ᴡᴇ'ʟʟ ʙᴇ ᴀᴅᴅɪɴɢ ᴍᴏʀᴇ sᴇʀᴠɪᴄᴇs sᴏᴏɴ!⚡
-
-🔑sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴀᴄᴄᴇss ᴅᴇᴛᴀɪʟs
-    `;
-    const inline_keyboard = [
-        [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }, { text: "🎨 Canva Pro", callback_data: "premium_service|canva_pro" }],
-        [{ text: "🍿 Netflix 4K", callback_data: "premium_service|netflix" }, { text: "💎 Prime Video", callback_data: "premium_service|prime_video" }],
-        [{ text: "👩‍🎓 Perplexity Pro", callback_data: "premium_service|perplexity_pro" }]
-    ];
-    await sendTelegramMessage(chatId, premiumHubMessage.trim(), { reply_markup: { inline_keyboard } });
-}
-
-
 async function requestFeedback(chatId, userId) {
     userState.set(userId, 'awaiting_feedback');
     await sendTelegramMessage(chatId, "📝 Please send your feedback, suggestion, or bug report. Use /cancel to abort.");
@@ -365,7 +337,6 @@ async function handleBroadcast(message, payload) {
     await sendTelegramMessage(message.chat.id, `✅ Broadcast complete! Sent to ${successCount}/${users.length} users.`);
 }
 
-
 // --- Callback & Download Logic ---
 async function handleCallbackQuery(callbackQuery) {
     const { data, message, from, inline_message_id } = callbackQuery;
@@ -399,126 +370,7 @@ async function handleCallbackQuery(callbackQuery) {
     }
     
     if (action === "premium_service") {
-        // Double-check premium status before showing details
-        const isPremium = await checkPremium(userId);
-        if (!isPremium) {
-            await answerCallbackQuery(callbackQuery.id, "🚫 Access Denied. This is for lifetime members only.", true);
-            return;
-        }
-
-        const service = payload;
-        let serviceMessage, serviceKeyboard;
-
-        switch(service) {
-            case "chatgpt_pro":
-                serviceMessage = `
-🧠 𝗖𝗵𝗮𝘁𝗚𝗣𝗧 𝗣𝗹𝘂𝘀 𝗔𝗰𝗰𝗲𝘀𝘀 🧠
-
-ʏᴏᴜʀ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ɪs ᴀᴄᴛɪᴠᴇ. ғᴏʟʟᴏᴡ ᴛʜᴇsᴇ sᴛᴇᴘs:
-
-1. ᴄʟɪᴄᴋ ᴛʜᴇ ʟɪɴᴋ ᴛᴏ ᴠᴇʀɪғʏ ʏᴏᴜʀ ᴀᴄᴄᴇss.
-
-2. ʙᴏᴏᴋᴍᴀʀᴋ ᴛʜᴇ ʟɪɴᴋ! ᴛʜɪs ɪs ʏᴏᴜʀ ᴋᴇʏ ғᴏʀ ᴛʜᴇ ɴᴇxᴛ 𝟹𝟼𝟻 ᴅᴀʏs
-.
-3. ɪғ ʏᴏᴜ ʜᴀᴠᴇ ɪssᴜᴇs, ʀᴇᴏᴘᴇɴ ᴛʜᴇ ʟɪɴᴋ ᴛᴏ ʀᴇғʀᴇsʜ.
-
-<b>‼️ɪᴍᴘᴏʀᴛᴀɴᴛ:</b> ᴜsᴇ ᴀ <b>ᴜsᴀ ᴠᴘɴ</b> ғᴏʀ ʟᴏɢɪɴ.
-                `;
-                serviceKeyboard = [
-                    [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
-                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-                ];
-                break;
-
-            case "netflix":
-                serviceMessage = `
-╔═════ ≪ 🔮 ≫ ═════╗
-   ❤️‍🔥🍿 <b>N E T F L I X</b> 🍿❤️‍🔥
-╚═════ ≪ •❈• ≫ ═════╝
-💎✨ <b>P R E M I U M</b> ✨💎
-
-📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
-
-🔐 <b>Password:</b> <code>Ghana@2025</code>
-
-✨ <b>Features</b> ✨
-
-📺 4K UHD 🌟
-⬇️ Downloads 💾
-🌐 Access All Content 🌍
-📱 6 Devices Same Time ⌚
-                `;
-                serviceKeyboard = [[{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]];
-                break;
-
-            case "perplexity_pro":
-                serviceMessage = `
-👩‍🎓 <b>Perplexity Pro Access</b> 👩‍🎓
-
-Here are your login details.
-
-📧 <b>Email:</b> <code>Matrixzat99@gmail.com</code>
-
-<b>Login Instructions:</b>
-
-1. Use the email above to log in.
-2. The service will ask for a verification code.
-3. Please DM the admin to receive your code.
-                `;
-                serviceKeyboard = [
-                    [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
-                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-                ];
-                break;
-
-            case "canva_pro":
-                serviceMessage = `
-🎨✨ <b>Canva Pro Account</b> ✨🎨
-
-Your Canva Pro account is ready!
-
-📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
-
-<b>Verification:</b>
-
-If Canva asks for a verification code during login, please contact the admin to receive it.
-                `;
-                serviceKeyboard = [
-                    [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
-                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-                ];
-                break;
-
-            case "prime_video":
-                serviceMessage = `
-╔═════ ≪ •❈• ≫ ═════╗
-  🎬🔮 <b>PRIME VIDEO</b> 🔮🎬
-╚═════ ≪ •❈• ≫ ═════╝
-
-💎✨ <b>P R E M I U M</b> ✨💎
-
-✨ <b>Features</b> ✨
-
-📺 High Quality Streaming 🌟
-⬇️ Downloads 💾
-🌐 Prime Video Library 🌍
-📱 Multiple Device Support ⌚
-
-<i>Prime Video offers a vast collection of movies, TV shows, and Amazon Originals...</i>
-                `;
-                serviceKeyboard = [
-                    [{ text: "🔮 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
-                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-                ];
-                break;
-        }
-
-        await editMessageText(serviceMessage, { 
-            chat_id: privateChatId, 
-            message_id: message.message_id,
-            reply_markup: { inline_keyboard: serviceKeyboard }
-        });
-        await answerCallbackQuery(callbackQuery.id);
+        await handlePremiumServiceCallback(callbackQuery);
         return;
     }
 
@@ -566,7 +418,7 @@ If Canva asks for a verification code during login, please contact the admin to 
 
 
 // --- Premium System Helpers ---
-async function checkPremium(userId) {
+export async function checkPremium(userId) {
     if (userId === ADMIN_ID) return true;
     const userKey = ["users", userId];
     const user = (await kv.get(userKey)).value || {};
@@ -874,7 +726,7 @@ async function getVideoInfo(youtubeUrl) {
 }
 
 // --- Telegram API Helpers ---
-async function sendMedia(chatId, blob, type, caption, fileName, title) {
+export async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append('caption', caption);
@@ -893,19 +745,19 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`, { method: 'POST', body: formData });
 }
 
-async function apiRequest(method, params = {}) {
+export async function apiRequest(method, params = {}) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
   return res.json();
 }
-async function sendTelegramMessage(chatId, text, extra = {}) { return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra }); }
-async function sendPhoto(chatId, photo, caption, extra = {}) { return await apiRequest('sendPhoto', { chat_id: chatId, photo, caption, parse_mode: 'HTML', ...extra }); }
-async function sendSticker(chatId, sticker) { return await apiRequest('sendSticker', { chat_id: chatId, sticker }); }
-async function editMessageText(text, extra = {}) { return await apiRequest('editMessageText', { text, parse_mode: 'HTML', ...extra }); }
-async function deleteMessage(chatId, messageId) { return await apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
-async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
+export async function sendTelegramMessage(chatId, text, extra = {}) { return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra }); }
+export async function sendPhoto(chatId, photo, caption, extra = {}) { return await apiRequest('sendPhoto', { chat_id: chatId, photo, caption, parse_mode: 'HTML', ...extra }); }
+export async function sendSticker(chatId, sticker) { return await apiRequest('sendSticker', { chat_id: chatId, sticker }); }
+export async function editMessageText(text, extra = {}) { return await apiRequest('editMessageText', { text, parse_mode: 'HTML', ...extra }); }
+export async function deleteMessage(chatId, messageId) { return await apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
+export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v67 - Final Premium Hub)...");
+console.log("Starting Adiza All-In-One Downloader (v68 - Modular Premium Hub)...");
 Deno.serve(handler);
