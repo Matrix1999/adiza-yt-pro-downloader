@@ -403,7 +403,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         }
     }
 
-    const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Contacting your Python API for format: <b>${format.toUpperCase()}</b>... Please wait.`);
+    const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing YouTube ${format.toUpperCase()}...`);
     const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
 
     try {
@@ -411,13 +411,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         const endpoint = isAudio ? 'ytmp3' : 'ytmp4fhd'; 
         const apiRequestUrl = `${YTDLP_API_BASE_URL}/download/${endpoint}?url=${encodeURIComponent(videoUrl)}`;
         
-        console.log(`Calling new API: ${apiRequestUrl}`);
-        
-        if (isInline) {
-            // For inline, we can't show progress, so we just acknowledge
-        } else {
-             await editMessageText(`📞 Calling your API...`, editTarget);
-        }
+        console.log(`Calling  API-Endpoint: ${apiRequestUrl}`);
         
         const apiResponse = await fetch(apiRequestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
@@ -431,7 +425,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
             throw new Error(data.message || "Your API did not return a valid download URL.");
         }
         
-        if (!isInline) await editMessageText(`✅ API responded! Downloading final file now...`, editTarget);
+        if (!isInline) await editMessageText(`✅ Download in progress...`, editTarget);
         
         const finalFileResponse = await fetch(data.result.download_url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
         
@@ -444,6 +438,8 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         const safeTitle = (data.result.title || 'media').replace(/[^\w\s.-]/gi, '_');
         const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
         
+        if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
+
         await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded via @${BOT_USERNAME}`, fileName, data.result.title);
         if (!isInline && statusMsg) await deleteMessage(chatId, statusMsg.result.message_id);
         
@@ -452,7 +448,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
     } catch (error) {
         console.error("New download logic error:", error);
         const errorMessage = error.name === 'TimeoutError' 
-            ? `❌ **Request Timed Out!**\n\nYour API server took too long to respond.`
+            ? `❌ **Request Timed Out!** Your server took too long.`
             : `❌ **An Error Occurred!**\n\n<i>${error.message}</i>`;
         
         if (statusMsg && !isInline) {
@@ -462,6 +458,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         }
     }
 }
+
 
 // --- TikTok Download Function (Unchanged) ---
 async function startTikTokDownload(chatId, userId, url, format) {
