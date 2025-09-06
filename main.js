@@ -176,13 +176,13 @@ async function handleStart(message, referrerId) {
     await kv.set(["global", "photoCounter"], photoCount + 1);
 
     const welcomeMessage = `
-👋 Hello, <b>${user.first_name}</b>!
+👋 ʜᴇʟʟᴏ, <b>${user.first_name}</b>!
 
 <b>User ID:</b> <code>${user.id}</code>
 <b>Status:</b> ${userStatus}
 
-Welcome to Adiza YouTube & TikTok Downloader! 🌹
-Send a YouTube or TikTok link, or use /settings to see all commands.
+ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴅɪᴢᴀ ʏᴏᴜᴛᴜʙᴇ & ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ! 🌹
+sᴇɴᴅ ᴀ ʏᴏᴜᴛᴜʙᴇ ᴏʀ ᴛɪᴋᴛᴏᴋ ʟɪɴᴋ, ᴏʀ ᴜsᴇ /settings ᴛᴏ sᴇᴇ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -257,19 +257,33 @@ Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 108
 
 async function sendPremiumMemberMessage(chatId) {
     const premiumMessage = `
-💎 <b>Become a Lifetime Premium Member!</b> 💎
+💎 <b>𝗟𝗶𝗳𝗲𝘁𝗶𝗺𝗲 𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗠𝗲𝗺𝗯𝗲𝗿!</b> 💎
 
-Support the bot's development and server costs with a one-time donation and get **lifetime premium access** in return!
+Support the bot's development and server costs with a one-time donation of your choice to get 𝗹𝗶𝗳𝗲𝘁𝗶𝗺𝗲 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀 to all our services—both current and all future updates!
 
-✨ **Premium Benefits:**
-- 🎬 Unlimited 1080p Full HD downloads from YouTube.
-- 🚀 Unlimited HD video downloads from TikTok.
+✨𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗕𝗲𝗻𝗲𝗳𝗶𝘁𝘀:
+- 🎬 Unlimited 1080p Youtube Downloads. 
+- 🚀 Unlimited HD TikTok Downloads. 
 - ⚡ Priority access to new features.
 - 👑 A special "Premium User" status.
+- ⌛ VIP Support. 
+
+🎁 𝗘𝘅𝗰𝗹𝘂𝘀𝗶𝘃𝗲 𝗙𝘂𝘁𝘂𝗿𝗲 𝗔𝗰𝗰𝗲𝘀𝘀 𝗳𝗼𝗿 𝗗𝗼𝗻𝗼𝗿𝘀:
+As a lifetime member, you will automatically get access to our upcoming premium services, including:
+
+•• 🍿 Netflix Logins
+
+•• 🎨 Canva Pro Logins
+
+•• 🥏 Showmax Logins
+
+•• 💡 Prime Video Logins
+
+💎 And many more!
 
 To get started, simply make a donation of any amount you wish through our secure Paystack link. After donating, please contact the admin with a screenshot of your receipt to activate your lifetime access.
 
-Thank you for your incredible support! ❤️
+Thank u for your incredible support!❤️
     `;
     const inline_keyboard = [
         [{ text: "💳 Donate Now for Lifetime Access", url: DONATE_URL }],
