@@ -261,7 +261,7 @@ async function handleFeedbackSubmission(message) {
 async function grantPremiumAccess(message, payload) {
     const targetId = parseInt(payload);
     if (isNaN(targetId)) {
-        await sendTelegramMessage(message.chat.id, "Invalid User ID.");
+        await sendTelegramMessage(message.chat.id, "Invalid User ID. Usage: /grant_premium USER_ID");
         return;
     }
     const userKey = ["users", targetId];
@@ -272,7 +272,7 @@ async function grantPremiumAccess(message, payload) {
     }
     await kv.set(userKey, { ...user, is_permanent_premium: true });
     await sendTelegramMessage(message.chat.id, `✅ User ${targetId} now has permanent premium.`);
-    await sendTelegramMessage(targetId, "🎉 Congratulations! You have been granted lifetime <b>Premium Access</b>!", {});
+    await sendTelegramMessage(targetId, "🎉 Congratulations! You have been granted lifetime <b>Premium Access</b> by the admin!", {});
 }
 
 async function handleBroadcast(message, payload) {
