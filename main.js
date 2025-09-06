@@ -13,12 +13,12 @@ const WELCOME_PHOTO_URLS = [
 export const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
-const MAX_FILE_SIZE_MB = 40; // UPDATED to 40MB as requested
+const MAX_FILE_SIZE_MB = 40; 
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999;
 const REFERRAL_GOAL = 2; // Refer 2 users to get 1 credit
 const PREMIUM_ACCESS_DURATION_DAYS = 7; // 1 credit = 7 days of access
-const FETCH_TIMEOUT_MS = 30000; // 30 seconds timeout for fetch requests
+const FETCH_TIMEOUT_MS = 30000; // 30 seconds timeout
 
 // --- External Libraries ---
 import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
@@ -384,45 +384,65 @@ async function handleCallbackQuery(callbackQuery) {
 
 
 // --- Premium System Helpers ---
+
+// FIXED: This function now correctly checks for both permanent and temporary (expiring) premium status.
 export async function checkPremium(userId) {
     if (userId === ADMIN_ID) return true;
+
+    // 1. Check for permanent premium (from donation)
     const userKey = ["users", userId];
     const user = (await kv.get(userKey)).value || {};
-    return user.is_permanent_premium;
-}
-
-async function spendCredit(chatId, userId) {
-    const userKey = ["users", userId];
-    let user = (await kv.get(userKey)).value || {};
-    const credits = user.premium_credits || 0;
-
-    if (credits > 0) {
-        const premiumAccessKey = ["premium_access", userId];
-        const newExpiry = Date.now() + (PREMIUM_ACCESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
-        await kv.set(premiumAccessKey, { expires_at: newExpiry });
-        user.premium_credits = credits - 1;
-        await kv.set(userKey, user);
-        await sendTelegramMessage(chatId, `✅ 1 Premium Credit spent! You now have access for <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b>.`, {});
+    if (user.is_permanent_premium) {
         return true;
     }
+
+    // 2. Check for temporary premium (from referral credits)
+    const premiumAccessKey = ["premium_access", userId];
+    const premiumInfo = (await kv.get(premiumAccessKey)).value || {};
+    if (premiumInfo.expires_at && premiumInfo.expires_at > Date.now()) {
+        return true;
+    }
+    
+    // If neither check passes, the user is not premium.
     return false;
 }
 
-/**
- * Checks the size of a file from a URL using a HEAD request.
- * @param {string} url The URL of the file to check.
- * @returns {Promise<number|null>} The file size in MB, or null if it can't be determined.
- */
+// This function now correctly extends an existing premium subscription.
+async function spendCredit(chatId, userId) {
+    const userKey = ["users", userId];
+    const user = (await kv.get(userKey)).value;
+    if (!user || (user.premium_credits || 0) === 0) {
+        return false;
+    }
+
+    const premiumAccessKey = ["premium_access", userId];
+    const premiumInfo = (await kv.get(premiumAccessKey)).value || { expires_at: 0 };
+    
+    const now = Date.now();
+    // Start premium from now if expired, otherwise add to the existing expiry date.
+    const startTime = premiumInfo.expires_at > now ? premiumInfo.expires_at : now;
+    const newExpiry = startTime + (PREMIUM_ACCESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
+
+    await kv.set(premiumAccessKey, { expires_at: newExpiry });
+    
+    user.premium_credits -= 1;
+    await kv.set(userKey, user);
+    
+    const expiryDate = new Date(newExpiry).toLocaleString();
+    await sendTelegramMessage(chatId, `✅ <b>1 Premium Credit spent!</b>\n\nYou now have premium access until: ${expiryDate}`, {});
+    return true;
+}
+
 async function getFileSize(url) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS / 2); // Shorter timeout for just getting size
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS / 2);
 
     try {
         const response = await fetch(url, { method: "HEAD", signal: controller.signal });
         clearTimeout(timeoutId);
         if (response.ok && response.headers.has("content-length")) {
             const sizeInBytes = Number(response.headers.get("content-length"));
-            return sizeInBytes / (1024 * 1024); // Return size in MB
+            return sizeInBytes / (1024 * 1024);
         }
     } catch (error) {
         clearTimeout(timeoutId);
@@ -430,14 +450,21 @@ async function getFileSize(url) {
              console.error("Could not get file size:", error.message);
         }
     }
-    return null; // Return null if size can't be determined or request timed out
+    return null;
 }
 
-// --- UPDATED DOWNLOAD LOGIC ---
+// --- Download Logic ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
-    const isUserPremium = await checkPremium(userId);
+    // Check for premium status at the start.
+    let isUserPremium = await checkPremium(userId);
+
+    // If the format is premium and the user is not, try to spend a credit.
     if (format === '1080' && !isUserPremium) {
-        if (!(await spendCredit(chatId, userId))) {
+        const creditSpent = await spendCredit(chatId, userId);
+        if (creditSpent) {
+            isUserPremium = true; // They are now premium, proceed with the download.
+        } else {
+            // No credits to spend, inform the user and stop.
             await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
             return;
         }
@@ -502,9 +529,13 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
 }
 
 async function startTikTokDownload(chatId, userId, url, format) {
-    const isUserPremium = await checkPremium(userId);
+    let isUserPremium = await checkPremium(userId);
+
     if (format === 'video_hd' && !isUserPremium) {
-        if(!(await spendCredit(chatId, userId))) {
+        const creditSpent = await spendCredit(chatId, userId);
+        if (creditSpent) {
+            isUserPremium = true;
+        } else {
              await sendTelegramMessage(chatId, `⭐ <b>HD Video is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
             return;
         }
@@ -750,5 +781,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v70 - Final Size Check)...");
+console.log("Starting Adiza All-In-One Downloader (v71 - Premium Logic Fixed)...");
 Deno.serve(handler);
