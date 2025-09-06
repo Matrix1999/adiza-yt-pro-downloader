@@ -86,9 +86,9 @@ Paste a YouTube link or use the buttons below to get started.
             [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
-    } else if (text === "/settings") {
+    } else if (text === "/settings") { // <<< FIX: Handle /settings command
         await sendSettingsMessage(chatId);
-    } else if (text === "/donate") {
+    } else if (text === "/donate") { // <<< FIX: Handle /donate command
         await sendDonationMessage(chatId);
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
@@ -233,7 +233,7 @@ async function searchYoutube(query) {
     }
 }
 
-// --- Main Download Logic (MP3 FIX) ---
+// --- Main Download Logic (FIXED HYBRID APPROACH) ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? `${chatId}:${Date.now()}` : `${chatId}:${statusMsg.result.message_id}`;
@@ -247,45 +247,54 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         const info = await getVideoInfo(videoUrl);
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         
-        const isMp3 = format === 'mp3';
-        const downloadUrl = isMp3 
-            ? `https://cdn402.savetube.su/download?url=${encodeURIComponent(videoUrl)}&format=mp3`
-            : `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+        let fileBlob;
 
-        if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        // --- FIXED HYBRID LOGIC ---
+        if (format === 'mp3') {
+            // For MP3: Use direct SaveTube backend (bypass worker completely)
+            if (!isInline) await editMessageText(`🎧 Getting MP3 from SaveTube...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+            
+            const youtubeId = extractYouTubeId(videoUrl);
+            if (!youtubeId) throw new Error("Invalid YouTube URL");
+            
+            const mp3Url = `https://cdn402.savetube.su/download?url=${encodeURIComponent(videoUrl)}&format=mp3`;
+            const mp3Response = await fetch(mp3Url, { 
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://yt.savetube.me/'
+                },
+                signal: controller.signal 
+            });
+            
+            if (!mp3Response.ok) throw new Error(`SaveTube MP3 failed: ${mp3Response.status}`);
+            fileBlob = await mp3Response.blob();
+        } else {
+            // For Videos: Use your Cloudflare Worker (with size check)
+            const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+            
+            if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+            const headRes = await fetch(downloadUrl, { method: 'HEAD', signal: controller.signal });
+            if (!headRes.ok) throw new Error(`Server check failed: ${headRes.status}`);
+            
+            const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
+            const fileSizeMB = contentLength / (1024 * 1024);
+            if (fileSizeMB > MAX_FILE_SIZE_MB) {
+                const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
+                if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+                else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+                return;
+            }
 
-        // --- FIXED LOGIC: Use GET for everything, but check headers first ---
-        const fetchOptions = {
-            method: 'GET', // Always use GET
-            signal: controller.signal,
-            headers: isMp3 ? {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://yt.savetube.me/'
-            } : {}
-        };
-        
-        const fileRes = await fetch(downloadUrl, fetchOptions);
-        if (!fileRes.ok) throw new Error(`Download failed: ${fileRes.status} ${fileRes.statusText}`);
-
-        const contentLength = parseInt(fileRes.headers.get('content-length') || "0", 10);
-        const fileSizeMB = contentLength / (1024 * 1024);
-
-        if (fileSizeMB > MAX_FILE_SIZE_MB) {
-            const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
-            const externalLinkBtn = { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] };
-            if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: externalLinkBtn });
-            else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: externalLinkBtn });
-            return;
+            if (!isInline) await editMessageText(`🚀 Downloading from worker...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+            const fileRes = await fetch(downloadUrl, { signal: controller.signal });
+            if (!fileRes.ok) throw new Error(`Worker download failed: ${fileRes.status}`);
+            fileBlob = await fileRes.blob();
         }
-
-        if (!isInline) await editMessageText(`🚀 Downloading...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-        
-        const fileBlob = await fileRes.blob();
 
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
         
-        const fileType = isMp3 ? 'audio' : 'video';
-        const fileExtension = isMp3 ? 'mp3' : 'mp4';
+        const fileType = format === 'mp3' ? 'audio' : 'video';
+        const fileExtension = fileType === 'audio' ? 'mp3' : 'mp4';
         const fileName = `${safeTitle}.${fileExtension}`;
         
         await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
@@ -444,5 +453,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v46 - MP3 HEAD Fix)...");
+console.log("Starting Adiza Downloader Bot (v44 - Command Fix)...");
 Deno.serve(handler);
