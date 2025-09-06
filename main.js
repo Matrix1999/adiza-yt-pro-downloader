@@ -60,10 +60,13 @@ async function handleMessage(message) {
     
     await delay(4000);
     
-    const premiumBadge = user.is_premium ? "⭐" : "👤";
+    // --- THIS IS THE NEW, UPGRADED WELCOME MESSAGE ---
+    const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
     const welcomeMessage = `
-👋 Hello, <b>${user.first_name}</b>! ${premiumBadge}
-Your User ID is: <code>${user.id}</code>
+👋 Hello, <b>${user.first_name}</b>!
+
+<b>User ID:</b> <code>${user.id}</code>
+<b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
 Paste a YouTube link or use /settings to customize your experience.
@@ -93,8 +96,8 @@ async function handleCallbackQuery(callbackQuery) {
       if (controller) {
           controller.abort();
           activeDownloads.delete(payload);
-          await editMessageText(chatId, message.message_id, "<i>❌ Download Canceled.</i>");
       }
+      await editMessageText(chatId, message.message_id, "<i>❌ Download Canceled.</i>");
       return;
   }
   
@@ -132,7 +135,7 @@ async function handleCallbackQuery(callbackQuery) {
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      const messageText = `⚠️ <b>File Too Large!</b>\nThe file is ${fileSizeMB.toFixed(2)}MB. Please use the direct link.`;
+      const messageText = `⚠️ <b>File Too Large!</b>\nThe file is ${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'too big'}. Please use the direct link.`;
       const inline_keyboard = [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]];
       await editMessageText(chatId, statusMsg.result.message_id, messageText, { reply_markup: { inline_keyboard } });
     }
@@ -217,6 +220,7 @@ function createFormatButtons(videoUrl) {
     let rows = [], currentRow = [];
     formats.forEach(f => {
         const quality = f.toLowerCase() === 'mp3' ? 'mp3' : f.toLowerCase().replace('p', '');
+        const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
@@ -228,5 +232,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v8 - Ultimate)...");
+console.log("Starting final professional bot server (v10 - Final)...");
 Deno.serve(handler);
