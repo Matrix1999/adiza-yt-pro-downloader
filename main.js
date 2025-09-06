@@ -177,13 +177,13 @@ async function handleStart(message, referrerId) {
     await kv.set(["global", "photoCounter"], photoCount + 1);
 
     const welcomeMessage = `
-👋 Hello, <b>${user.first_name}</b>!
+👋 ʜᴇʟʟᴏ, <b>${user.first_name}</b>!
 
 <b>User ID:</b> <code>${user.id}</code>
 <b>Status:</b> ${userStatus}
 
-Welcome to Adiza YouTube & TikTok Downloader! 🌹
-Send a YouTube or TikTok link, or use /settings to see all commands.
+ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴅɪᴢᴀ ʏᴏᴜᴛᴜʙᴇ & ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ʙᴏᴛ!🌹
+sᴇɴᴅ ᴀ ʏᴏᴜᴛᴜʙᴇ ᴏʀ ᴛɪᴋᴛᴏᴋ ʟɪɴᴋ, ᴏʀ ᴜsᴇ /settings ᴛᴏ sᴇᴇ ᴀʟʟ ᴏᴜʀ ᴄᴏᴍᴍᴀɴᴅs & ᴘʀᴇᴍɪᴜᴍ ғᴇᴀᴛᴜʀᴇs.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }, { text: "👑 OWNER 👑", url: OWNER_URL }],
@@ -258,27 +258,24 @@ Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 108
 
 async function sendPremiumMemberMessage(chatId) {
     const premiumMessage = `
-💎 <b>Become a Lifetime Premium Member!</b> 💎
+💎 <b>ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴍᴇᴍʙᴇʀ!</b> 💎
 
-Support the bot's development and server costs with a one-time donation of your choice to get <b>lifetime premium access</b> to all our services—both current and all future updates!
+sᴜᴘᴘᴏʀᴛ ᴛʜᴇ ʙᴏᴛ's ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ ᴀɴᴅ sᴇʀᴠᴇʀ ᴄᴏsᴛs ᴡɪᴛʜ ᴀ ᴏɴᴇ-ᴛɪᴍᴇ ᴅᴏɴᴀᴛɪᴏɴ ᴏғ ʏᴏᴜʀ ᴄʜᴏɪᴄᴇ ᴛᴏ ɢᴇᴛ <b>ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇss</b> ᴛᴏ ᴀʟʟ ᴏᴜʀ sᴇʀᴠɪᴄᴇs—ʙᴏᴛʜ ᴄᴜʀʀᴇɴᴛ & ᴀʟʟ ғᴜᴛᴜʀᴇ ᴜᴘᴅᴀᴛᴇs!
 
-✨ <b>Your Premium Benefits:</b>
-- 🎬 Unlimited 1080p Full HD downloads from YouTube.
-- 🚀 Unlimited HD video downloads (no watermark) from TikTok.
-- ⚡ Priority access to new features as they are released.
-- 👑 A special "Premium User" status on your profile.
+✨ <b>ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʙᴇɴᴇғɪᴛs:</b>
 
-🎁 <b>Exclusive Future Access for Donors:</b>
-As a lifetime member, you will automatically get access to our upcoming premium services, including:
-- Netflix Logins
-- Canva Pro Accounts
-- Showmax Logins
-- Prime Video Logins
-- ...and many more!
+- 🎬 ᴜɴʟɪᴍɪᴛᴇᴅ 𝟷𝟶𝟾𝟶ᴘ ʏᴛ ᴅᴏᴡɴʟᴏᴀᴅs.
+- 🚀 ᴜɴʟɪᴍɪᴛᴇᴅ ʜᴅ ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅs. 
+- ⚡ ᴘʀɪᴏʀɪᴛʏ ᴀᴄᴄᴇss ᴛᴏ ɴᴇᴡ ғᴇᴀᴛᴜʀᴇs. 
+- 🍿 ɴᴇᴛғʟɪx 𝟺ᴋ ʟᴏɢɪɴs
+- 🎨 ᴄᴀɴᴠᴀ ᴘʀᴏ ᴀᴄᴄᴏᴜɴᴛs
+- 👑 sʜᴏᴡᴍᴀx ʟᴏɢɪɴs
+- 🥏 ᴘʀɪᴍᴇ ᴠɪᴅᴇᴏ ʟᴏɢɪɴs 
+- 💎ᴀɴᴅ ᴍᴀɴʏ ᴍᴏʀᴇ.... 
 
-To get started, simply make a donation of any amount you wish through our secure Paystack link. After donating, please contact the admin with a screenshot of your receipt to activate your lifetime access.
+⌛ᴛᴏ ɢᴇᴛ sᴛᴀʀᴛᴇᴅ, sɪᴍᴘʟʏ ᴍᴀᴋᴇ ᴀ ᴅᴏɴᴀᴛɪᴏɴ ᴏғ ɴᴏᴛ ʟᴇss ᴛʜᴀɴ 𝟺$ ᴛʜʀᴏᴜɢʜ ᴏᴜʀ sᴇᴄᴜʀᴇ ᴘᴀʏsᴛᴀᴄᴋ ʟɪɴᴋ. ᴀғᴛᴇʀ ᴅᴏɴᴀᴛɪɴɢ, ᴘʟᴇᴀsᴇ ᴄᴏɴᴛᴀᴄᴛ ᴛʜᴇ ᴀᴅᴍɪɴ ᴡɪᴛʜ ᴀ sᴄʀᴇᴇɴsʜᴏᴛ ᴏғ ʏᴏᴜʀ ʀᴇᴄᴇɪᴘᴛ ᴛᴏ ᴀᴄᴛɪᴠᴀᴛᴇ ʏᴏᴜʀ ʟɪғᴇᴛɪᴍᴇ ᴀᴄᴄᴇss.
 
-Thank you for your incredible support! ❤️
+ᴛʜᴀɴᴋ ᴜ ғᴏʀ ʏᴏᴜʀ ɪɴᴄʀᴇᴅɪʙʟᴇ sᴜᴘᴘᴏʀᴛ!❤️
     `;
     const inline_keyboard = [
         [{ text: "💳 Donate Now for Lifetime Access", url: DONATE_URL }],
@@ -291,28 +288,28 @@ async function handlePremiumHubRequest(chatId, userId) {
     const isPremium = await checkPremium(userId);
     if (!isPremium) {
         await sendTelegramMessage(chatId, `
-🚫 <b>Access Denied</b> 🚫
+🔑🚫 <b>Access Denied</b> 🚫🔑
 
-This <b>Premium Hub</b> is exclusively for our lifetime premium members who have supported the bot through a donation.
+ᴛʜɪs <b>Pᴘʀᴇᴍɪᴜᴍ ʜᴜʙ</b> ɪs ᴇxᴄʟᴜsɪᴠᴇʟʏ ғᴏʀ ᴏᴜʀ 💎ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴍᴇᴍʙᴇʀs💎 ᴡʜᴏ ʜᴀᴠᴇ sᴜᴘᴘᴏʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ᴛʜʀᴏᴜɢʜ ᴀ ᴅᴏɴᴀᴛɪᴏɴ💰.
 
-To unlock this section and all future premium services, please consider becoming a lifetime member.
+🐬ᴛᴏ ᴜɴʟᴏᴄᴋ ᴛʜɪs sᴇᴄᴛɪᴏɴ ᴀɴᴅ ᴀʟʟ ғᴜᴛᴜʀᴇ ᴘʀᴇᴍɪᴜᴍ sᴇʀᴠɪᴄᴇs, ᴘʟᴇᴀsᴇ ᴄᴏɴsɪᴅᴇʀ ʙᴇᴄᴏᴍɪɴɢ ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ.
 
-Use the /premium_member command to learn more.
+ᴜsᴇ ᴛʜᴇ /premium_member ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ʟᴇᴀʀɴ ᴍᴏʀᴇ.
         `);
         return;
     }
 
     const premiumHubMessage = `
-💎 **Welcome to the Premium Hub!** 💎
+💎 𝙒𝙚𝙡𝙘𝙤𝙢𝙚 𝙏𝙤 𝙏𝙝𝙚 𝙋𝙧𝙚𝙢𝙞𝙪𝙢 𝙃𝙪𝙗! 💎 
 
-This is your central place for all exclusive premium content. As a lifetime member, you have access to everything listed below. We'll be adding more services soon!
+ᴛʜɪs ɪs ʏᴏᴜʀ ᴄᴇɴᴛʀᴀʟ ᴢᴏɴᴇ ғᴏʀ ᴀʟʟ ᴇxᴄʟᴜsɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴄᴏɴᴛᴇɴᴛ. ᴀs ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ, ʏᴏᴜ ʜᴀᴠᴇ ᴀᴄᴄᴇss to ᴇᴠᴇʀʏᴛʜɪɴɢ ʟɪsᴛᴇᴅ ʙᴇʟᴏᴡ. ᴡᴇ'ʟʟ ʙᴇ ᴀᴅᴅɪɴɢ ᴍᴏʀᴇ sᴇʀᴠɪᴄᴇs sᴏᴏɴ!⚡
 
-Select an option to get your access details:
+🔑sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴀᴄᴄᴇss ᴅᴇᴛᴀɪʟs🔑
     `;
     const inline_keyboard = [
         [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }, { text: "🎨 Canva Pro", callback_data: "premium_service|canva_pro" }],
-        [{ text: "📺 Netflix 4K", callback_data: "premium_service|netflix" }, { text: "🎬 Prime Video", callback_data: "premium_service|prime_video" }],
-        [{ text: "🤔 Perplexity Pro", callback_data: "premium_service|perplexity_pro" }]
+        [{ text: "🍿 Netflix 4K", callback_data: "premium_service|netflix" }, { text: "💎 Prime Video", callback_data: "premium_service|prime_video" }],
+        [{ text: "👩‍🎓 Perplexity Pro", callback_data: "premium_service|perplexity_pro" }]
     ];
     await sendTelegramMessage(chatId, premiumHubMessage.trim(), { reply_markup: { inline_keyboard } });
 }
@@ -415,15 +412,17 @@ async function handleCallbackQuery(callbackQuery) {
         switch(service) {
             case "chatgpt_pro":
                 serviceMessage = `
-🧠 **ChatGPT Plus Access**
+🧠 𝗖𝗵𝗮𝘁𝗚𝗣𝗧 𝗣𝗹𝘂𝘀 𝗔𝗰𝗰𝗲𝘀𝘀 🧠
 
-Your subscription is active. Follow these steps:
+ʏᴏᴜʀ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ɪs ᴀᴄᴛɪᴠᴇ. ғᴏʟʟᴏᴡ ᴛʜᴇsᴇ sᴛᴇᴘs:
 
-1. Click the link to verify your access.
-2. Bookmark the link! This is your key for the next 365 days.
-3. If you have issues, reopen the link to refresh.
+1. ᴄʟɪᴄᴋ ᴛʜᴇ ʟɪɴᴋ ᴛᴏ ᴠᴇʀɪғʏ ʏᴏᴜʀ ᴀᴄᴄᴇss.
 
-<b>Important:</b> Use a <b>USA VPN</b> for login.
+2. ʙᴏᴏᴋᴍᴀʀᴋ ᴛʜᴇ ʟɪɴᴋ! ᴛʜɪs ɪs ʏᴏᴜʀ ᴋᴇʏ ғᴏʀ ᴛʜᴇ ɴᴇxᴛ 𝟹𝟼𝟻 ᴅᴀʏs
+.
+3. ɪғ ʏᴏᴜ ʜᴀᴠᴇ ɪssᴜᴇs, ʀᴇᴏᴘᴇɴ ᴛʜᴇ ʟɪɴᴋ ᴛᴏ ʀᴇғʀᴇsʜ.
+
+<b>‼️ɪᴍᴘᴏʀᴛᴀɴᴛ:</b> ᴜsᴇ ᴀ <b>ᴜsᴀ ᴠᴘɴ</b> ғᴏʀ ʟᴏɢɪɴ.
                 `;
                 serviceKeyboard = [
                     [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
@@ -439,9 +438,11 @@ Your subscription is active. Follow these steps:
 💎✨ <b>P R E M I U M</b> ✨💎
 
 📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
+
 🔐 <b>Password:</b> <code>Ghana@2025</code>
 
 ✨ <b>Features</b> ✨
+
 📺 4K UHD 🌟
 ⬇️ Downloads 💾
 🌐 Access All Content 🌍
@@ -478,6 +479,7 @@ Your Canva Pro account is ready!
 📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
 
 <b>Verification:</b>
+
 If Canva asks for a verification code during login, please contact the admin to receive it.
                 `;
                 serviceKeyboard = [
@@ -491,9 +493,11 @@ If Canva asks for a verification code during login, please contact the admin to 
 ╔═════ ≪ •❈• ≫ ═════╗
   🎬🔮 <b>PRIME VIDEO</b> 🔮🎬
 ╚═════ ≪ •❈• ≫ ═════╝
+
 💎✨ <b>P R E M I U M</b> ✨💎
 
 ✨ <b>Features</b> ✨
+
 📺 High Quality Streaming 🌟
 ⬇️ Downloads 💾
 🌐 Prime Video Library 🌍
@@ -502,7 +506,7 @@ If Canva asks for a verification code during login, please contact the admin to 
 <i>Prime Video offers a vast collection of movies, TV shows, and Amazon Originals...</i>
                 `;
                 serviceKeyboard = [
-                    [{ text: "📲 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
+                    [{ text: "🔮 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
                     [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
                 ];
                 break;
@@ -765,13 +769,17 @@ Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
 
 ⭐ <b>How to Get Premium Access:</b>
 There are two ways to get premium features:
-- <b>Temporary Access:</b> Use /refer to invite friends. For every ${REFERRAL_GOAL} referrals, you get a credit for ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
-- <b>Lifetime Access:</b> Use /premium_member or /donate to make a one-time donation for permanent premium access. This also includes access to the /premium_hub for exclusive content.
+
+- <b>Temporary Access:</b> 
+Use /refer to invite friends. For every ${REFERRAL_GOAL} referrals, you get a credit for ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
+- <b>Lifetime Access:</b> 
+Use /premium_member or /donate to make a one-time donation for permanent premium access. This also includes access to the /premium_hub for exclusive content.
 
 ⚙️ <b>Other Commands</b>
+
 /settings - Manage your preferences
 /refer - Get your referral link
-/feedback - Send a message to the admin
+/feedback - Send a bug reports to admin
 /cancel - Cancel the current operation`;
         await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
