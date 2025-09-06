@@ -308,10 +308,11 @@ async function handleCallbackQuery(callbackQuery) {
              const formatButtons = await createInlineFormatButtons(videoId, userId);
              await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
         } else {
+            // This handles the format selection from an inline message
             await answerCallbackQuery(callbackQuery.id);
             const [format, videoId] = action.split(":");
             await editMessageText("✅ Request accepted! Sending file to our private chat.", { inline_message_id, reply_markup: {inline_keyboard: []} });
-            await startDownload(userId, userId, `https://youtu.be/${videoId}`, format, true);
+            await startDownload(userId, userId, `https://youtu.be/${videoId}`, format, true, inline_message_id);
         }
         return;
     }
@@ -391,10 +392,9 @@ async function spendCredit(chatId, userId) {
 }
 
 // --- Rewritten YouTube Download Function ---
-async function startDownload(chatId, userId, videoUrl, format, isInline = false) {
+async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     let isUserPremium = await checkPremium(userId);
 
-    // Premium check for 1080p
     if (format === '1080' && !isUserPremium) {
         const creditSpent = await spendCredit(chatId, userId);
         if (!creditSpent) {
@@ -403,8 +403,8 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         }
     }
 
-    const statusMsg = await sendTelegramMessage(chatId, `⏳ Contacting your Python API for format: <b>${format.toUpperCase()}</b>... Please wait.`);
-    const editTarget = isInline ? {} : { chat_id: chatId, message_id: statusMsg.result.message_id };
+    const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Contacting your Python API for format: <b>${format.toUpperCase()}</b>... Please wait.`);
+    const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
 
     try {
         const isAudio = format === 'mp3';
@@ -412,6 +412,13 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         const apiRequestUrl = `${YTDLP_API_BASE_URL}/download/${endpoint}?url=${encodeURIComponent(videoUrl)}`;
         
         console.log(`Calling new API: ${apiRequestUrl}`);
+        
+        if (isInline) {
+            // For inline, we can't show progress, so we just acknowledge
+            // The main work happens in the background and file is sent upon completion
+        } else {
+             await editMessageText(`📞 Calling your API...`, editTarget);
+        }
         
         const apiResponse = await fetch(apiRequestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
@@ -425,7 +432,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
             throw new Error(data.message || "Your API did not return a valid download URL.");
         }
         
-        await editMessageText(`✅ API responded! Downloading final file now...`, editTarget);
+        if (!isInline) await editMessageText(`✅ API responded! Downloading final file now...`, editTarget);
         
         const finalFileResponse = await fetch(data.result.download_url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
         
@@ -439,7 +446,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
         
         await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded via @${BOT_USERNAME}`, fileName, data.result.title);
-        if (!isInline) await deleteMessage(chatId, statusMsg.result.message_id);
+        if (!isInline && statusMsg) await deleteMessage(chatId, statusMsg.result.message_id);
         
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
@@ -449,14 +456,18 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
             ? `❌ **Request Timed Out!**\n\nYour API server took too long to respond.`
             : `❌ **An Error Occurred!**\n\n<i>${error.message}</i>`;
         
-        if (statusMsg && !isInline) await editMessageText(errorMessage, editTarget);
-        else if (isInline) await sendTelegramMessage(chatId, errorMessage);
+        if (statusMsg && !isInline) {
+            await editMessageText(errorMessage, editTarget);
+        } else if (isInline) {
+            // We can't edit the inline message, so we send a new message to the user's chat.
+            // Note: `chatId` in inline mode is the user's ID.
+            await sendTelegramMessage(chatId, errorMessage);
+        }
     }
 }
 
 // --- TikTok Download Function (Unchanged) ---
 async function startTikTokDownload(chatId, userId, url, format) {
-    // This function can remain as it was, using the TIKTOK_API_BASE_URL
     let isUserPremium = await checkPremium(userId);
 
     if (format === 'video_hd' && !isUserPremium) {
@@ -699,5 +710,3 @@ export async function answerCallbackQuery(id, text, showAlert = false) { return 
 // --- Server Start ---
 console.log("Starting Adiza Bot (v77 - Python API Integration)...");
 Deno.serve(handler);
-
-
