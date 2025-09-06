@@ -158,7 +158,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        if (!isInline) await editMessageText(`🚀 Downloading from API...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        if (!isInline) await editMessageText(`🚀 Download in progresss...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
 
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
         
