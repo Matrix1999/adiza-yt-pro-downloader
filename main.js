@@ -63,7 +63,7 @@ async function handleMessage(message) {
     }
 
     if (text === "/start") {
-        await kv.set(["users", userId], user); // Track user
+        await kv.set(["users", userId], user);
         if (WELCOME_STICKER_IDS.length > 0) {
             const stickerCount = (await kv.get(["global", "stickerCounter"])).value || 0;
             await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
@@ -104,7 +104,6 @@ async function handleCallbackQuery(callbackQuery) {
     const [action, ...payloadParts] = data.split("|");
     const payload = payloadParts.join("|");
 
-    // --- Logic for Inline Mode Callbacks ---
     if (inline_message_id) {
         if (action === "download") {
             await answerCallbackQuery(callbackQuery.id);
@@ -119,8 +118,7 @@ async function handleCallbackQuery(callbackQuery) {
             const fileSizeMB = contentLength / (1024 * 1024);
 
             if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                const messageText = `⚠️ <b>File Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
-                await editMessageText(messageText, { 
+                await editMessageText(`⚠️ <b>File Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`, { 
                     inline_message_id, 
                     reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } 
                 });
@@ -131,20 +129,62 @@ async function handleCallbackQuery(callbackQuery) {
         } else if (action === "formats") {
              const videoId = payload;
              await answerCallbackQuery(callbackQuery.id);
-             const formatButtons = createInlineFormatButtons(videoId);
-             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
+             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: createInlineFormatButtons(videoId)}});
         }
         return;
     }
     
-    // --- Logic for Private Chat Callbacks ---
     if(message) {
         const privateChatId = message.chat.id;
-        // ... (All previous private chat callback handlers remain here) ...
+        if (action === "cancel") {
+            const controller = activeDownloads.get(payload);
+            if (controller) controller.abort();
+            await editMessageText("❌ Download Canceled.", { chat_id: privateChatId, message_id: message.message_id });
+            return;
+        }
+        if (action === "donate_now") {
+            await sendDonationMessage(privateChatId);
+            await answerCallbackQuery(callbackQuery.id);
+            return;
+        }
+        if (action === "settings_menu") {
+            await answerCallbackQuery(callbackQuery.id);
+            await deleteMessage(privateChatId, message.message_id); 
+            await sendSettingsMessage(privateChatId);
+            return;
+        }
+        if (action === "settings_quality") {
+            const userQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
+            return;
+        }
+        if (action === "set_default") {
+            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
+            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
+            return;
+        }
+        if (action === "user_stats") {
+            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: privateChatId, message_id: message.message_id, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            return;
+        }
+        if (action === "back_to_settings") {
+            await sendSettingsMessage(privateChatId, message.message_id, true);
+            return;
+        }
+        if (action === "help_menu") {
+            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
+            await editMessageText(helpMessage, { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            return;
+        }
+        const [format, videoUrl] = data.split("|");
+        await deleteMessage(privateChatId, message.message_id);
+        await startDownload(privateChatId, userId, videoUrl, format);
     }
 }
 
-// --- Inline Query Handler ---
 async function handleInlineQuery(inlineQuery) {
     const query = inlineQuery.query.trim();
     let results = [];
@@ -170,7 +210,6 @@ async function handleInlineQuery(inlineQuery) {
     });
 }
 
-// --- Broadcast Handler ---
 async function handleBroadcast(message) {
     if (!message.reply_to_message) {
         await sendTelegramMessage(message.chat.id, "⚠️ **Broadcast Error**\nPlease reply to the message you want to broadcast, then type `/broadcast`.");
@@ -190,8 +229,6 @@ async function handleBroadcast(message) {
     await sendTelegramMessage(message.chat.id, `✅ **Broadcast Complete!**\nSent to ${successCount} of ${users.length} users.`);
 }
 
-
-// --- YouTube Search for Inline Mode ---
 async function searchYoutube(query) {
     try {
         const response = await YouTube.GetListByKeyword(query, false, 15, [{type: 'video'}]);
@@ -202,7 +239,6 @@ async function searchYoutube(query) {
     }
 }
 
-// --- Main Download Logic ---
 async function startDownload(chatId, userId, videoUrl, format) {
     const statusMsg = await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = `${chatId}:${statusMsg.result.message_id}`;
@@ -248,7 +284,6 @@ async function startDownload(chatId, userId, videoUrl, format) {
     }
 }
 
-// --- Helper Functions ---
 async function sendDonationMessage(chatId) {
     await sendTelegramMessage(chatId, `💖 **Support Adiza Bot!**\n\nYour support helps cover server costs. Click below to make a secure donation.`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
 }
@@ -278,7 +313,6 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
-// --- New Helper for Inline Format Buttons ---
 function createInlineFormatButtons(videoId) {
     const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
     const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
@@ -301,7 +335,6 @@ async function getVideoInfo(youtubeUrl) {
     }
 }
 
-// --- Telegram API Helpers ---
 async function apiRequest(method, params = {}) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
@@ -369,6 +402,5 @@ function createFormatButtons(videoUrl) {
     return rows;
 }
 
-// --- Server Start ---
-console.log("Starting final professional bot server (v31 - Definitive Final)...");
+console.log("Starting final professional bot server (v32 - Definitive Final)...");
 Deno.serve(handler);
