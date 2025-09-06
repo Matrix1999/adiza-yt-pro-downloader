@@ -300,11 +300,11 @@ async function handlePremiumHubRequest(chatId, userId) {
     }
 
     const premiumHubMessage = `
-💎 𝙒𝙚𝙡𝙘𝙤𝙢𝙚 𝙏𝙤 𝙏𝙝𝙚 𝙋𝙧𝙚𝙢𝙞𝙪𝙢 𝙃𝙪𝙗! 💎 
+⌛💎 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗣𝗢𝗥𝗧𝗔𝗟 💎⌛ 
 
-ᴛʜɪs ɪs ʏᴏᴜʀ ᴄᴇɴᴛʀᴀʟ ᴢᴏɴᴇ ғᴏʀ ᴀʟʟ ᴇxᴄʟᴜsɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴄᴏɴᴛᴇɴᴛ. ᴀs ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ, ʏᴏᴜ ʜᴀᴠᴇ ᴀᴄᴄᴇss to ᴇᴠᴇʀʏᴛʜɪɴɢ ʟɪsᴛᴇᴅ ʙᴇʟᴏᴡ. ᴡᴇ'ʟʟ ʙᴇ ᴀᴅᴅɪɴɢ ᴍᴏʀᴇ sᴇʀᴠɪᴄᴇs sᴏᴏɴ!⚡
+⚡ᴛʜɪs ɪs ʏᴏᴜʀ ᴄᴇɴᴛʀᴀʟ ᴢᴏɴᴇ ғᴏʀ ᴀʟʟ ᴇxᴄʟᴜsɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴄᴏɴᴛᴇɴᴛ. ᴀs ᴀ ʟɪғᴇᴛɪᴍᴇ ᴍᴇᴍʙᴇʀ, ʏᴏᴜ ʜᴀᴠᴇ ᴀᴄᴄᴇss to ᴇᴠᴇʀʏᴛʜɪɴɢ ʟɪsᴛᴇᴅ ʙᴇʟᴏᴡ. ᴡᴇ'ʟʟ ʙᴇ ᴀᴅᴅɪɴɢ ᴍᴏʀᴇ sᴇʀᴠɪᴄᴇs sᴏᴏɴ!⚡
 
-🔑sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴀᴄᴄᴇss ᴅᴇᴛᴀɪʟs🔑
+🔑sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴀᴄᴄᴇss ᴅᴇᴛᴀɪʟs
     `;
     const inline_keyboard = [
         [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }, { text: "🎨 Canva Pro", callback_data: "premium_service|canva_pro" }],
@@ -453,13 +453,14 @@ async function handleCallbackQuery(callbackQuery) {
 
             case "perplexity_pro":
                 serviceMessage = `
-🤔 <b>Perplexity Pro Access</b>
+👩‍🎓 <b>Perplexity Pro Access</b> 👩‍🎓
 
 Here are your login details.
 
 📧 <b>Email:</b> <code>Matrixzat99@gmail.com</code>
 
 <b>Login Instructions:</b>
+
 1. Use the email above to log in.
 2. The service will ask for a verification code.
 3. Please DM the admin to receive your code.
