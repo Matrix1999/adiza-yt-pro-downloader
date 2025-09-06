@@ -9,6 +9,9 @@ const MAX_FILE_SIZE_MB = 49;
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999; // Your Telegram User ID for Admin commands
 
+// --- External Libraries ---
+import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
+
 // --- Deno KV Database ---
 const kv = await Deno.openKv();
 
@@ -103,6 +106,7 @@ async function handleCallbackQuery(callbackQuery) {
 
     if (action === "download") {
         const [format, videoId] = payload.split(":");
+        // Downloads are always sent to the user's private chat
         await startDownload(from.id, userId, `https://youtu.be/${videoId}`, format);
         await answerCallbackQuery(callbackQuery.id, `Starting your ${format.toUpperCase()} download...`);
         return;
@@ -155,8 +159,8 @@ async function handleCallbackQuery(callbackQuery) {
         }
 
         if (action === "user_stats") {
-            const downloads = await kv.get(["users", userId, "downloads"]);
-            const statsMessage = `📊 **Your Stats**\n\nTotal Downloads: *${downloads.value || 0}*`;
+            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+            const statsMessage = `📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`;
             const statsKeyboard = [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]];
             await editMessageText(privateChatId, message.message_id, statsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: statsKeyboard } });
             return;
@@ -188,17 +192,17 @@ async function handleInlineQuery(inlineQuery) {
         const searchResults = await searchYoutube(query);
         results = searchResults.map(video => ({
             type: 'article',
-            id: video.id.videoId,
-            title: video.snippet.title,
-            thumb_url: video.snippet.thumbnails.default.url,
+            id: video.id,
+            title: video.title,
+            thumb_url: video.thumbnail.url,
             input_message_content: {
-                message_text: `*You selected:* ${video.snippet.title}\n\nChoose a format below to download.`
+                message_text: `*You selected:* ${video.title}\n\nChoose a format below to download.`
             },
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: "🎵 Download MP3", callback_data: `download|mp3:${video.id.videoId}` },
-                        { text: "📺 Download MP4", callback_data: `download|720:${video.id.videoId}` }
+                        { text: "🎵 Download MP3", callback_data: `download|mp3:${video.id}` },
+                        { text: "📺 Download MP4", callback_data: `download|720:${video.id}` }
                     ]
                 ]
             }
@@ -215,7 +219,7 @@ async function handleInlineQuery(inlineQuery) {
 // --- Broadcast Handler ---
 async function handleBroadcast(message) {
     if (!message.reply_to_message) {
-        await sendTelegramMessage(message.chat.id, "⚠️ 𝗕𝗿𝗼𝗮𝗱𝗰𝗮𝘀𝘁 𝗘𝗿𝗿𝗼𝗿\nPlease reply to the message (text, photo, or video) you want to broadcast and then type `/broadcast`.");
+        await sendTelegramMessage(message.chat.id, "⚠️ **Broadcast Error**\nPlease reply to the message (text, photo, or video) you want to broadcast and then type `/broadcast`.");
         return;
     }
 
@@ -245,17 +249,15 @@ async function handleBroadcast(message) {
 }
 
 
-// --- YouTube Search for Inline Mode (Placeholder) ---
+// --- YouTube Search for Inline Mode ---
 async function searchYoutube(query) {
-    console.log("YouTube search is a placeholder. Replace with a real API for full functionality.");
-    return [{
-        id: { videoId: "dQw4w9WgXcQ" },
-        snippet: { title: "Sample Video: Rick Astley - Never Gonna Give You Up", thumbnails: { default: { url: "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg" } } }
-    },
-    {
-        id: { videoId: "o-YBDTqX_ZU" },
-        snippet: { title: "Sample Video: Michael Jackson - Billie Jean", thumbnails: { default: { url: "https://i.ytimg.com/vi/o-YBDTqX_ZU/default.jpg" } } }
-    }];
+    try {
+        const response = await YouTube.GetListByKeyword(query, false, 15, [{type: 'video'}]);
+        return response.items || [];
+    } catch (error) {
+        console.error("YouTube search error:", error);
+        return [];
+    }
 }
 
 // --- Main Download Logic ---
@@ -292,7 +294,7 @@ async function startDownload(chatId, userId, videoUrl, format) {
         const fileExtension = format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4';
         const fileName = `${safeTitle}.${fileExtension}`;
         
-        await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
+        await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
         await deleteMessage(chatId, statusMsg.result.message_id);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
@@ -425,7 +427,7 @@ function createFormatButtons(videoUrl) {
     let rows = [], currentRow = [];
     formats.forEach(f => {
         const quality = f.toLowerCase().replace('p', '');
-        const icon = formatMap[f.toLowerCase()] || '💾';
+        const icon = formatMap[f] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
@@ -437,5 +439,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v25 - Feature Complete)...");
+console.log("Starting final professional bot server (v27 - Live Inline Search Fix)...");
 Deno.serve(handler);
