@@ -50,7 +50,7 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// --- Logic Handlers ---
+// --- LOGIC HANDLER (WITH COMMAND FIX) ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -86,6 +86,10 @@ Paste a YouTube link or use the buttons below to get started.
             [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
+    } else if (text === "/settings") {
+        await sendSettingsMessage(chatId);
+    } else if (text === "/donate") {
+        await sendDonationMessage(chatId);
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
         if (userQuality) {
@@ -135,8 +139,36 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             return;
         }
-        if (action.startsWith("settings") || action.startsWith("back_to_") || action.startsWith("user_") || action.startsWith("set_default") || action.startsWith("help_")) {
-            await handleSettingsCallbacks(callbackQuery);
+        if (action === "settings_menu") {
+            await answerCallbackQuery(callbackQuery.id);
+            await deleteMessage(privateChatId, message.message_id); 
+            await sendSettingsMessage(privateChatId);
+            return;
+        }
+        if (action === "settings_quality") {
+            const userQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
+            return;
+        }
+        if (action === "set_default") {
+            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
+            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
+            return;
+        }
+        if (action === "user_stats") {
+            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: privateChatId, message_id: message.message_id, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            return;
+        }
+        if (action === "back_to_settings") {
+            await sendSettingsMessage(privateChatId, message.message_id, true);
+            return;
+        }
+        if (action === "help_menu") {
+            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
+            await editMessageText(helpMessage, { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
             return;
         }
         const [format, videoUrl] = data.split("|");
@@ -201,7 +233,7 @@ async function searchYoutube(query) {
     }
 }
 
-// --- Main Download Logic (FIXED HYBRID APPROACH) ---
+// --- Main Download Logic (WITH UNIFIED SIZE CHECK) ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? `${chatId}:${Date.now()}` : `${chatId}:${statusMsg.result.message_id}`;
@@ -215,54 +247,47 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
         const info = await getVideoInfo(videoUrl);
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         
-        let fileBlob;
+        const isMp3 = format === 'mp3';
+        const downloadUrl = isMp3 
+            ? `https://cdn402.savetube.su/download?url=${encodeURIComponent(videoUrl)}&format=mp3`
+            : `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
 
-        // --- FIXED HYBRID LOGIC ---
-        if (format === 'mp3') {
-            // For MP3: Use direct SaveTube backend (bypass worker completely)
-            if (!isInline) await editMessageText(`🎧 Getting MP3 from SaveTube...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-            
-            const youtubeId = extractYouTubeId(videoUrl);
-            if (!youtubeId) throw new Error("Invalid YouTube URL");
-            
-            const mp3Url = `https://cdn402.savetube.su/download?url=${encodeURIComponent(videoUrl)}&format=mp3`;
-            const mp3Response = await fetch(mp3Url, { 
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Referer': 'https://yt.savetube.me/'
-                },
-                signal: controller.signal 
-            });
-            
-            if (!mp3Response.ok) throw new Error(`SaveTube MP3 failed: ${mp3Response.status}`);
-            fileBlob = await mp3Response.blob();
-        } else {
-            // For Videos: Use your Cloudflare Worker (with size check)
-            const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
-            
-            if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-            const headRes = await fetch(downloadUrl, { method: 'HEAD', signal: controller.signal });
-            if (!headRes.ok) throw new Error(`Server check failed: ${headRes.status}`);
-            
-            const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
-            const fileSizeMB = contentLength / (1024 * 1024);
-            if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
-                if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-                else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-                return;
-            }
+        const fetchOptions = {
+            method: 'HEAD',
+            signal: controller.signal,
+            headers: isMp3 ? {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://yt.savetube.me/'
+            } : {}
+        };
 
-            if (!isInline) await editMessageText(`🚀 Downloading from worker...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-            const fileRes = await fetch(downloadUrl, { signal: controller.signal });
-            if (!fileRes.ok) throw new Error(`Worker download failed: ${fileRes.status}`);
-            fileBlob = await fileRes.blob();
+        if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        const headRes = await fetch(downloadUrl, fetchOptions);
+        if (!headRes.ok) throw new Error(`Server check failed: ${headRes.status} ${headRes.statusText}`);
+        
+        const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
+        const fileSizeMB = contentLength / (1024 * 1024);
+
+        if (fileSizeMB > MAX_FILE_SIZE_MB) {
+            const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
+            const externalLinkBtn = { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] };
+            if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: externalLinkBtn });
+            else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: externalLinkBtn });
+            return;
         }
+
+        if (!isInline) await editMessageText(`🚀 Downloading...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        
+        // Use GET for the actual download
+        fetchOptions.method = 'GET';
+        const fileRes = await fetch(downloadUrl, fetchOptions);
+        if (!fileRes.ok) throw new Error(`Download failed: ${fileRes.status}`);
+        const fileBlob = await fileRes.blob();
 
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
         
-        const fileType = format === 'mp3' ? 'audio' : 'video';
-        const fileExtension = fileType === 'audio' ? 'mp3' : 'mp4';
+        const fileType = isMp3 ? 'audio' : 'video';
+        const fileExtension = isMp3 ? 'mp3' : 'mp4';
         const fileName = `${safeTitle}.${fileExtension}`;
         
         await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
@@ -296,44 +321,6 @@ function extractYouTubeId(url) {
 }
 
 // --- OTHER HELPER FUNCTIONS ---
-async function handleSettingsCallbacks(callbackQuery) {
-    const { data, message, from } = callbackQuery;
-    const [action, ...payloadParts] = data.split("|");
-    const payload = payloadParts.join("|");
-    const chatId = message.chat.id;
-    const messageId = message.message_id;
-    const userId = from.id;
-
-    switch(action) {
-        case "settings_menu":
-            await answerCallbackQuery(callbackQuery.id);
-            await deleteMessage(chatId, messageId); 
-            await sendSettingsMessage(chatId);
-            break;
-        case "settings_quality":
-            const userQuality = (await kv.get(["users", userId, "quality"])).value;
-            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
-            break;
-        case "set_default":
-            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
-            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
-            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
-            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
-            break;
-        case "user_stats":
-            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
-            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
-            break;
-        case "back_to_settings":
-            await sendSettingsMessage(chatId, messageId, true);
-            break;
-        case "help_menu":
-            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
-            await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
-            break;
-    }
-}
-
 async function sendDonationMessage(chatId) {
     await sendTelegramMessage(chatId, `💖 **Support Adiza Bot!**\n\nYour support helps cover server costs and allows me to keep adding new features. Click the button below to make a secure donation.`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
 }
@@ -459,5 +446,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v43 - Simple SaveTube MP3 Fix)...");
+console.log("Starting Adiza Downloader Bot (v45 - Unified Size Check)...");
 Deno.serve(handler);
