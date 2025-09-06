@@ -135,36 +135,8 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             return;
         }
-        if (action === "settings_menu") {
-            await answerCallbackQuery(callbackQuery.id);
-            await deleteMessage(privateChatId, message.message_id); 
-            await sendSettingsMessage(privateChatId);
-            return;
-        }
-        if (action === "settings_quality") {
-            const userQuality = (await kv.get(["users", userId, "quality"])).value;
-            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
-            return;
-        }
-        if (action === "set_default") {
-            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
-            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
-            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
-            await editMessageText("Please choose your preferred default download quality:", { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
-            return;
-        }
-        if (action === "user_stats") {
-            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
-            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: privateChatId, message_id: message.message_id, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
-            return;
-        }
-        if (action === "back_to_settings") {
-            await sendSettingsMessage(privateChatId, message.message_id, true);
-            return;
-        }
-        if (action === "help_menu") {
-            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
-            await editMessageText(helpMessage, { chat_id: privateChatId, message_id: message.message_id, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+        if (action.startsWith("settings") || action.startsWith("back_to_") || action.startsWith("user_") || action.startsWith("set_default") || action.startsWith("help_")) {
+            await handleSettingsCallbacks(callbackQuery);
             return;
         }
         const [format, videoUrl] = data.split("|");
@@ -324,6 +296,44 @@ function extractYouTubeId(url) {
 }
 
 // --- OTHER HELPER FUNCTIONS ---
+async function handleSettingsCallbacks(callbackQuery) {
+    const { data, message, from } = callbackQuery;
+    const [action, ...payloadParts] = data.split("|");
+    const payload = payloadParts.join("|");
+    const chatId = message.chat.id;
+    const messageId = message.message_id;
+    const userId = from.id;
+
+    switch(action) {
+        case "settings_menu":
+            await answerCallbackQuery(callbackQuery.id);
+            await deleteMessage(chatId, messageId); 
+            await sendSettingsMessage(chatId);
+            break;
+        case "settings_quality":
+            const userQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
+            break;
+        case "set_default":
+            payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+            await answerCallbackQuery(callbackQuery.id, `✅ Default quality ${payload === "remove" ? "removed" : `set to ${payload.toUpperCase()}`}.`);
+            const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+            await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
+            break;
+        case "user_stats":
+            const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+            await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            break;
+        case "back_to_settings":
+            await sendSettingsMessage(chatId, messageId, true);
+            break;
+        case "help_menu":
+            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
+            await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+            break;
+    }
+}
+
 async function sendDonationMessage(chatId) {
     await sendTelegramMessage(chatId, `💖 **Support Adiza Bot!**\n\nYour support helps cover server costs and allows me to keep adding new features. Click the button below to make a secure donation.`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
 }
