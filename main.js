@@ -101,6 +101,9 @@ async function handleMessage(message) {
         case "/refer":
             await sendReferralMessage(chatId, userId);
             break;
+        case "/premium_member":
+            await sendPremiumMemberMessage(chatId);
+            break;
         case "/feedback":
             await requestFeedback(chatId, userId);
             break;
@@ -110,7 +113,7 @@ async function handleMessage(message) {
             break;
         case "/search":
             if (payload) {
-                await handleSearch(chatId, payload, userId);
+                await handleSearch(chatId, payload);
             } else {
                 await sendTelegramMessage(chatId, "Please provide a search term. Usage: /search song name");
             }
@@ -178,9 +181,8 @@ async function handleStart(message, referrerId) {
 <b>User ID:</b> <code>${user.id}</code>
 <b>Status:</b> ${userStatus}
 
-ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴅɪᴢᴀ ʏᴏᴜᴛᴜʙᴇ & ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ!🌹
-
-sᴇɴᴅ ᴀ ʏᴏᴜᴛᴜʙᴇ ᴏʀ ᴛɪᴋᴛᴏᴋ ʟɪɴᴋ, ᴏʀ ᴜsᴇ /settings ᴛᴏ sᴇᴇ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
+Welcome to Adiza YouTube & TikTok Downloader! 🌹
+Send a YouTube or TikTok link, or use /settings to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -252,6 +254,30 @@ Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 108
     
     await sendTelegramMessage(chatId, message.trim(), { reply_markup: { inline_keyboard }});
 }
+
+async function sendPremiumMemberMessage(chatId) {
+    const premiumMessage = `
+💎 <b>Become a Lifetime Premium Member!</b> 💎
+
+Support the bot's development and server costs with a one-time donation and get **lifetime premium access** in return!
+
+✨ **Premium Benefits:**
+- 🎬 Unlimited 1080p Full HD downloads from YouTube.
+- 🚀 Unlimited HD video downloads from TikTok.
+- ⚡ Priority access to new features.
+- 👑 A special "Premium User" status.
+
+To get started, simply make a donation of any amount you wish through our secure Paystack link. After donating, please contact the admin with a screenshot of your receipt to activate your lifetime access.
+
+Thank you for your incredible support! ❤️
+    `;
+    const inline_keyboard = [
+        [{ text: "💳 Donate Now for Lifetime Access", url: DONATE_URL }],
+        [{ text: "👑 Contact Admin After Donating", url: OWNER_URL }]
+    ];
+    await sendTelegramMessage(chatId, premiumMessage.trim(), { reply_markup: { inline_keyboard }});
+}
+
 
 async function requestFeedback(chatId, userId) {
     userState.set(userId, 'awaiting_feedback');
@@ -346,7 +372,7 @@ async function handleCallbackQuery(callbackQuery) {
         return;
     }
 
-    if (action.startsWith("settings") || action === "back_to_settings" || action.startsWith("set_default") || action === "user_stats" || action === "help_menu") {
+    if (action.startsWith("settings") || action === "back_to_settings" || action.startsWith("set_default") || action === "user_stats" || action === "help_menu" || action === "get_premium") {
         await handleSettingsCallbacks(callbackQuery);
         return;
     }
@@ -546,6 +572,10 @@ async function handleSettingsCallbacks(callbackQuery) {
     const [action, payload] = data.split("|");
 
     if (action === "settings_menu") { await deleteMessage(chatId, messageId); await sendSettingsMessage(chatId); }
+    else if (action === "get_premium") {
+        await deleteMessage(chatId, messageId);
+        await sendPremiumMemberMessage(chatId);
+    }
     else if (action === "settings_quality") {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
         await editMessageText("Choose your default quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: await createQualitySettingsButtons(userQuality, userId) } });
@@ -576,8 +606,10 @@ Send a valid YouTube or TikTok link directly to me.
 3️⃣ <b>Inline Mode (In Any Chat)</b>
 Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
 
-⭐ <b>Premium Access</b>
-Download in 1080p & HD quality by referring friends or donating. Use /refer to see your progress.
+⭐ <b>How to Get Premium Access:</b>
+There are two ways to get premium features:
+- <b>Temporary Access:</b> Use /refer to invite friends. For every ${REFERRAL_GOAL} referrals, you get a credit for ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
+- <b>Lifetime Access:</b> Use /premium_member or /donate to make a one-time donation for permanent premium access.
 
 ⚙️ <b>Other Commands</b>
 /settings - Manage your preferences
@@ -592,6 +624,7 @@ Download in 1080p & HD quality by referring friends or donating. Use /refer to s
 async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
     const settingsMessage = "⚙️ <b>User Settings</b>";
     const inline_keyboard = [
+        [{ text: "💎 Get Premium", callback_data: "get_premium" }],
         [{ text: "⚙️ Default Quality", callback_data: "settings_quality" }],
         [{ text: "📊 My Stats", callback_data: "user_stats" }],
         [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
@@ -601,7 +634,7 @@ async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit 
 }
 
 async function sendDonationMessage(chatId) {
-    await sendTelegramMessage(chatId, `💖 <b>Support Adiza Bot!</b>\n\nYour support helps cover server costs. After donating, please contact the admin to receive lifetime premium access.`, { reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
+    await sendPremiumMemberMessage(chatId);
 }
 
 async function createQualitySettingsButtons(currentQuality, userId) {
@@ -707,5 +740,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v63 - Photo Rotation)...");
+console.log("Starting Adiza All-In-One Downloader (v64 - Premium Command)...");
 Deno.serve(handler);
