@@ -125,9 +125,14 @@ async function handleCallbackQuery(callbackQuery) {
                     reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } 
                 });
             } else {
-                await editMessageText("✅ Request accepted! I'm sending the file to you in our private chat.", { inline_message_id });
+                await editMessageText("✅ Request accepted! I'm sending the file to you in our private chat.", { inline_message_id, reply_markup: {inline_keyboard: []} });
                 await startDownload(userId, userId, videoUrl, format);
             }
+        } else if (action === "formats") {
+             const videoId = payload;
+             await answerCallbackQuery(callbackQuery.id);
+             const formatButtons = createInlineFormatButtons(videoId);
+             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
         }
         return;
     }
@@ -196,14 +201,9 @@ async function handleInlineQuery(inlineQuery) {
             title: video.title,
             description: `Duration: ${video.length.simpleText}`,
             thumb_url: video.thumbnail.url,
-            input_message_content: { message_text: `*You selected:* ${video.title}\n\nChoose a format below to download.` },
+            input_message_content: { message_text: `*You selected:* ${video.title}\n\nPress the button below to choose a download format.` },
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: "🎵 Download MP3", callback_data: `download|mp3:${video.id}` },
-                        { text: "📺 Download MP4", callback_data: `download|720:${video.id}` }
-                    ]
-                ]
+                inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]]
             }
         }));
     }
@@ -324,6 +324,17 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
+// --- New Helper for Inline Format Buttons ---
+function createInlineFormatButtons(videoId) {
+    const formats = ['mp3', '360', '720'];
+    const formatLabels = { 'mp3': 'MP3', '360': '360p', '720': '720p' };
+    const formatIcons = { 'mp3': '🎵', '360': '📺', '720': '💎' };
+    let buttons = formats.map(f => ({ text: `${formatIcons[f]} ${formatLabels[f]}`, callback_data: `download|${f}:${videoId}` }));
+    let rows = [];
+    while (buttons.length > 0) rows.push(buttons.splice(0, 3));
+    return rows;
+}
+
 async function getVideoInfo(youtubeUrl) {
     try {
         const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`);
@@ -405,5 +416,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v28 - Final Inline UX)...");
+console.log("Starting final professional bot server (v30 - Definitive Final)...");
 Deno.serve(handler);
