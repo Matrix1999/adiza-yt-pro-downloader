@@ -154,7 +154,7 @@ async function handleStart(message, referrerId) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Send a YouTube link or use /help to see all commands.
+Check /settings to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
