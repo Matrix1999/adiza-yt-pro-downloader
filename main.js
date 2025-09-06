@@ -276,10 +276,13 @@ async function startDownload(chatId, userId, videoUrl, format) {
         const fileBlob = await fileRes.blob();
         await editMessageText(`✅ Uploading to you...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
         
+        // <<< START OF THE FIX >>>
+        // This logic is restored from your old, working code to ensure MP3s are handled correctly.
         const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-        const fileExtension = format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4';
-        const fileName = `${safeTitle}.${fileExtension}`;
-        
+        // The filename must end with .mp3 for audio, and .mp4 for video.
+        const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
+        // <<< END OF THE FIX >>>
+
         await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
         await deleteMessage(chatId, statusMsg.result.message_id);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
@@ -324,11 +327,11 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
-// --- New Helper for Inline Format Buttons ---
+// --- FIX 2: Updated Helper for Inline Format Buttons (ALL FORMATS) ---
 function createInlineFormatButtons(videoId) {
-    const formats = ['mp3', '360', '720'];
-    const formatLabels = { 'mp3': 'MP3', '360': '360p', '720': '720p' };
-    const formatIcons = { 'mp3': '🎵', '360': '📺', '720': '💎' };
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
+    const formatIcons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
     let buttons = formats.map(f => ({ text: `${formatIcons[f]} ${formatLabels[f]}`, callback_data: `download|${f}:${videoId}` }));
     let rows = [];
     while (buttons.length > 0) rows.push(buttons.splice(0, 3));
@@ -386,7 +389,6 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     formData.append('caption', caption);
     let inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
     if (type === 'audio' && title) {
-        // Corrected Spotify URL
         const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
     }
@@ -417,5 +419,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v30 - Definitive Final)...");
+console.log("Starting final professional bot server (v34 - Final Fix)...");
 Deno.serve(handler);
