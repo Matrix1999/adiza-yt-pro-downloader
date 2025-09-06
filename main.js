@@ -64,7 +64,6 @@ async function handleCallbackQuery(callbackQuery) {
   const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size...</i>`);
 
   try {
-    // Fetch video title for the filename
     const info = await getVideoInfo(videoUrl);
     const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
 
@@ -83,7 +82,6 @@ async function handleCallbackQuery(callbackQuery) {
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
       const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       
-      // Send the media with the correct caption and filename
       await sendMedia(chatId, fileBlob, fileType, `Via @${BOT_USERNAME}`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
@@ -97,7 +95,6 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
-// --- Helper to get video info from YouTube's oEmbed ---
 async function getVideoInfo(youtubeUrl) {
     try {
         const response = await fetch(`https://www.youtube.com/oembed?url=${youtubeUrl}&format=json`);
@@ -137,14 +134,12 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
-// CORRECTED sendMedia function
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
     
-    // For audio files, set title and performer correctly
     if (type === 'audio') {
         formData.append('title', title || 'Unknown');
         formData.append('performer', `Via @${BOT_USERNAME}`);
@@ -154,13 +149,15 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     await fetch(url, { method: 'POST', body: formData });
 }
 
+// THIS FUNCTION IS NOW FIXED
 function createFormatButtons(videoUrl) {
     const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
-    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '🗳', '360p': '🔮', '480p': '📺', '720p': '', '1080p': '💎' };
+    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '🔥' };
     let rows = [], currentRow = [];
     
     formats.forEach(f => {
-        const quality = f.toLowerCase().replace('p', '');
+        // FIX: Check if the format is MP3 and handle it separately
+        const quality = f.toLowerCase() === 'mp3' ? 'mp3' : f.toLowerCase().replace('p', '');
         const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
@@ -173,5 +170,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final stable bot server...");
+console.log("Starting final stable bot server (v2)...");
 Deno.serve(handler);
