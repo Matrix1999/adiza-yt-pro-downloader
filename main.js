@@ -592,27 +592,30 @@ async function sendDonationMessage(chatId) {
     await sendPremiumMemberMessage(chatId);
 }
 
+// FULL FORMAT LIST RESTORED
 async function createQualitySettingsButtons(currentQuality, userId) {
     const hasPremium = await checkPremium(userId);
-    const formats = ['mp3', '360', '720', '1080'];
-    const icons = { 'mp3': '🎵', '360': '🔮', '720': '🗳', '1080': '💎' };
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const icons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳️', '1080': '💎' };
+    
     let buttons = formats.map(f => {
         let text = `${currentQuality === f ? "✅ " : ""}${icons[f]} ${f.toUpperCase()}`;
         if (f === '1080' && !hasPremium) text = `⭐ ${text}`;
         return { text, callback_data: `set_default|${f}` };
     });
+    
     let rows = [];
-    while (buttons.length > 0) rows.push(buttons.splice(0, 3));
+    while (buttons.length > 0) rows.push(buttons.splice(0, 3)); // 3 buttons per row
     rows.push([{ text: "❌ Remove Default", callback_data: "set_default|remove" }, { text: "🔙 Back", callback_data: "back_to_settings" }]);
     return rows;
 }
 
+// FULL FORMAT LIST RESTORED
 async function createFormatButtons(videoUrl, userId) {
     const hasPremium = await checkPremium(userId);
     const user = (await kv.get(["users", userId])).value || {};
     const credits = user.premium_credits || 0;
     
-    // RESTORED to your original format list
     const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
     const icons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳️', '1080': '💎' };
     
@@ -623,7 +626,7 @@ async function createFormatButtons(videoUrl, userId) {
              buttonText = `⭐ ${buttonText} (${credits} credits)`;
         }
         currentRow.push({ text: buttonText, callback_data: `${f}|${videoUrl}` });
-        if(currentRow.length === 3) { // RESTORED to your original 3-button layout
+        if(currentRow.length === 3) { // 3 buttons per row
             rows.push(currentRow);
             currentRow = [];
         }
@@ -646,13 +649,14 @@ async function createTikTokFormatButtons(url, userId) {
     return [buttons];
 }
 
+// FULL FORMAT LIST RESTORED
 async function createInlineFormatButtons(videoId, userId) {
     const hasPremium = await checkPremium(userId);
     const user = (await kv.get(["users", userId])).value || {};
     const credits = user.premium_credits || 0;
     
-    const formats = ['mp3', '360', '720', '1080'];
-    const icons = { 'mp3': '🎵', '360': '🔮', '720': '🗳️', '1080': '💎' };
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const icons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳️', '1080': '💎' };
     
     let rows = [], currentRow = [];
     formats.forEach(f => {
@@ -660,9 +664,8 @@ async function createInlineFormatButtons(videoId, userId) {
         if (f === '1080' && !hasPremium) {
              buttonText = `⭐ ${buttonText} (${credits} credits)`;
         }
-        // Corrected format for inline callbacks
         currentRow.push({ text: buttonText, callback_data: `${f}:${videoId}` });
-        if(currentRow.length === 2) {
+        if(currentRow.length === 3) {
             rows.push(currentRow);
             currentRow = [];
         }
@@ -704,5 +707,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Bot (v78 - Final Python API Integration)...");
+console.log("Starting Adiza Bot (v80 - Final UI Restore)...");
 Deno.serve(handler);
