@@ -171,7 +171,7 @@ async function handleStart(message, referrerId) {
     await delay(4000);
     
     const userDb = (await kv.get(userKey)).value || {};
-    const userStatus = userDb.is_permanent_premium ? "⭐ Premium User" : "👤 Standard User";
+    const userStatus = await checkPremium(userId) ? "⭐ Premium User" : "👤 Standard User";
     
     // Photo Rotation Logic
     const photoCount = (await kv.get(["global", "photoCounter"])).value || 0;
@@ -263,15 +263,15 @@ async function sendPremiumMemberMessage(chatId) {
     const premiumMessage = `
 💎 <b>Become a Lifetime Premium Member!</b> 💎
 
-Support the bot's development and server costs with a one-time donation of your choice to get **lifetime premium access** to all our services—both current and all future updates!
+Support the bot's development and server costs with a one-time donation of your choice to get <b>lifetime premium access</b> to all our services—both current and all future updates!
 
-✨ **Your Premium Benefits:**
+✨ <b>Your Premium Benefits:</b>
 - 🎬 Unlimited 1080p Full HD downloads from YouTube.
 - 🚀 Unlimited HD video downloads (no watermark) from TikTok.
 - ⚡ Priority access to new features as they are released.
 - 👑 A special "Premium User" status on your profile.
 
-🎁 **Exclusive Future Access for Donors:**
+🎁 <b>Exclusive Future Access for Donors:</b>
 As a lifetime member, you will automatically get access to our upcoming premium services, including:
 - Netflix Logins
 - Canva Pro Accounts
@@ -291,12 +291,12 @@ Thank you for your incredible support! ❤️
 }
 
 async function handlePremiumHubRequest(chatId, userId) {
-    const userDb = (await kv.get(["users", userId])).value || {};
-    if (!userDb.is_permanent_premium) {
+    const isPremium = await checkPremium(userId);
+    if (!isPremium) {
         await sendTelegramMessage(chatId, `
 🚫 <b>Access Denied</b> 🚫
 
-This **Premium Hub** is exclusively for our lifetime premium members who have supported the bot through a donation.
+This <b>Premium Hub</b> is exclusively for our lifetime premium members who have supported the bot through a donation.
 
 To unlock this section and all future premium services, please consider becoming a lifetime member.
 
@@ -313,9 +313,9 @@ This is your central place for all exclusive premium content. As a lifetime memb
 Select an option to get your access details:
     `;
     const inline_keyboard = [
-        [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }],
-        // Add more buttons here for future services
-        // [{ text: "📺 Netflix", callback_data: "premium_service|netflix" }],
+        [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }, { text: "🎨 Canva Pro", callback_data: "premium_service|canva_pro" }],
+        [{ text: "📺 Netflix 4K", callback_data: "premium_service|netflix" }, {- text: "🎬 Prime Video", callback_data: "premium_service|prime_video" }],
+        [{ text: "🤔 Perplexity Pro", callback_data: "premium_service|perplexity_pro" }]
     ];
     await sendTelegramMessage(chatId, premiumHubMessage.trim(), { reply_markup: { inline_keyboard } });
 }
@@ -398,37 +398,108 @@ async function handleCallbackQuery(callbackQuery) {
     const privateChatId = message.chat.id;
 
     if (action === "premium_hub") {
-        await deleteMessage(privateChatId, message.message_id);
+        await deleteMessage(privateChatId, message.message_id).catch(e => console.error(e));
         await handlePremiumHubRequest(privateChatId, userId);
+        await answerCallbackQuery(callbackQuery.id);
         return;
     }
     
     if (action === "premium_service") {
         const service = payload;
+        let serviceMessage, serviceKeyboard;
+
         if (service === "chatgpt_pro") {
-            const chatGptMessage = `
-🧠 **Your ChatGPT Plus Access**
+            serviceMessage = `
+🧠 **ChatGPT Plus Access**
 
-Your subscription is active and ready to use.
+Your subscription is active. Follow these steps:
 
-**How to Use:**
-1. Click the link below to verify your access.
-2. Bookmark the link! This is your key for the next 365 days.
-3. If you face any issues, just reopen the same link. The system will refresh your access or assign a new account automatically.
+1. Click the link to verify your access.
+2. Bookmark the link for future use.
+3. If you have issues, reopen the link to refresh.
 
-**Important:** Use a **USA VPN** when logging in.
+**Important:** Use a **USA VPN** for login.
             `;
-            await editMessageText(chatGptMessage, { 
-                chat_id: privateChatId, 
-                message_id: message.message_id,
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
-                        [{ text: "🔙 Back to Premium Hub", callback_data: "premium_hub" }]
-                    ]
-                }
-            });
+            serviceKeyboard = [
+                [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
+                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+            ];
+        } else if (service === "netflix") {
+            serviceMessage = `
+╔═════ ≪ 🔮 ≫ ═════╗
+   ❤️‍🔥🍿 **N E T F L I X** 🍿❤️‍🔥
+╚═════ ≪ •❈• ≫ ═════╝
+💎✨ **P R E M I U M** ✨💎
+
+📧 **Email:** \`adizaqueen399@gmail.com\`
+🔐 **Password:** \`Ghana@2025\`
+
+✨ **Features** ✨
+📺 4K UHD 🌟
+⬇️ Downloads 💾
+🌐 Access All Content 🌍
+📱 6 Devices Same Time ⌚
+            `;
+            serviceKeyboard = [[{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]];
+        } else if (service === "perplexity_pro") {
+            serviceMessage = `
+🤔 **Perplexity Pro Access**
+
+Here are your login details.
+
+📧 **Email:** \`Matrixzat99@gmail.com\`
+
+**Login Instructions:**
+1. Use the email above to log in.
+2. The service will ask for a verification code.
+3. Please DM the admin to receive your code.
+            `;
+            serviceKeyboard = [
+                [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
+                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+            ];
+        } else if (service === "canva_pro") {
+            serviceMessage = `
+🎨✨ **Canva Pro Account** ✨🎨
+
+Your Canva Pro account is ready!
+
+📧 **Email:** \`adizaqueen399@gmail.com\`
+
+**Verification:**
+If Canva asks for a verification code during login, please contact the admin to receive it.
+            `;
+            serviceKeyboard = [
+                [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
+                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+            ];
+        } else if (service === "prime_video") {
+            serviceMessage = `
+╔═════ ≪ •❈• ≫ ═════╗
+  🎬🔮 **PRIME VIDEO** 🔮🎬
+╚═════ ≪ •❈• ≫ ═════╝
+💎✨ **P R E M I U M** ✨💎
+
+✨ **Features** ✨
+📺 High Quality Streaming 🌟
+⬇️ Downloads 💾
+🌐 Prime Video Library 🌍
+📱 Multiple Device Support ⌚
+
+*Prime Video offers a vast collection of movies, TV shows, and Amazon Originals...*
+            `;
+            serviceKeyboard = [
+                [{ text: "📲 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
+                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+            ];
         }
+
+        await editMessageText(serviceMessage, { 
+            chat_id: privateChatId, 
+            message_id: message.message_id,
+            reply_markup: { inline_keyboard: serviceKeyboard }
+        });
+        await answerCallbackQuery(callbackQuery.id);
         return;
     }
 
@@ -477,9 +548,10 @@ Your subscription is active and ready to use.
 
 // --- Premium System Helpers ---
 async function checkPremium(userId) {
+    if (userId === ADMIN_ID) return true;
     const userKey = ["users", userId];
     const user = (await kv.get(userKey)).value || {};
-    return user.is_permanent_premium || userId === ADMIN_ID;
+    return user.is_permanent_premium;
 }
 
 async function spendCredit(chatId, userId) {
@@ -811,5 +883,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v65 - Premium Hub)...");
+console.log("Starting Adiza All-In-One Downloader (v66 - Expanded Premium Hub)...");
 Deno.serve(handler);
