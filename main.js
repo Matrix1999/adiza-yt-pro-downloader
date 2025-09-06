@@ -55,7 +55,12 @@ async function handleMessage(message) {
     const userId = user.id;
 
     if (userState.get(userId) === 'awaiting_feedback') {
-        await handleFeedbackSubmission(message);
+        if (text === "/cancel") {
+            userState.delete(userId);
+            await sendTelegramMessage(chatId, "Feedback submission canceled.");
+        } else {
+            await handleFeedbackSubmission(message);
+        }
         return;
     }
 
@@ -69,7 +74,7 @@ async function handleMessage(message) {
 
     switch (command) {
         case "/start":
-            await handleStart(message, args);
+            await handleStart(message, args[0]);
             break;
         case "/settings":
             await sendSettingsMessage(chatId);
@@ -82,6 +87,10 @@ async function handleMessage(message) {
             break;
         case "/feedback":
             await requestFeedback(chatId, userId);
+            break;
+        case "/cancel":
+            userState.delete(userId);
+            await sendTelegramMessage(chatId, "Operation canceled.");
             break;
         case "/search":
             if (payload) {
@@ -99,7 +108,7 @@ async function handleMessage(message) {
                     await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: await createFormatButtons(text, userId) } });
                 }
             } else {
-                await sendTelegramMessage(chatId, "Sorry, I didn't understand that. Please use /search to find a song, or send a YouTube link.");
+                await sendTelegramMessage(chatId, "Sorry, I didn't understand that. Use /help to see available commands.");
             }
             break;
     }
@@ -145,7 +154,7 @@ async function handleStart(message, referrerId) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-To get started, use /search followed by a song name.
+Send a YouTube link or use /help to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -202,7 +211,7 @@ Your personal link:
 
 async function requestFeedback(chatId, userId) {
     userState.set(userId, 'awaiting_feedback');
-    await sendTelegramMessage(chatId, "📝 Please send your feedback, suggestion, or bug report in a single message.");
+    await sendTelegramMessage(chatId, "📝 Please send your feedback, suggestion, or bug report. Use /cancel to abort.");
 }
 
 async function handleFeedbackSubmission(message) {
@@ -297,7 +306,7 @@ async function handleCallbackQuery(callbackQuery) {
     }
 
     if (action.startsWith("settings") || action === "back_to_settings" || action.startsWith("set_default") || action === "user_stats" || action === "help_menu") {
-        await handleSettingsCallbacks(action, payload, privateChatId, message.message_id, userId);
+        await handleSettingsCallbacks(callbackQuery);
         return;
     }
 
@@ -390,7 +399,13 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
 async function handleInlineQuery(inlineQuery) { /* ... implementation ... */ }
 async function searchYoutube(query) { /* ... implementation ... */ }
 
-async function handleSettingsCallbacks(action, payload, chatId, messageId, userId) {
+async function handleSettingsCallbacks(callbackQuery) {
+    const { data, message, from } = callbackQuery;
+    const userId = from.id;
+    const chatId = message.chat.id;
+    const messageId = message.message_id;
+    const [action, payload] = data.split("|");
+
     if (action === "settings_menu") { await deleteMessage(chatId, messageId); await sendSettingsMessage(chatId); }
     else if (action === "settings_quality") {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
@@ -402,7 +417,7 @@ async function handleSettingsCallbacks(action, payload, chatId, messageId, userI
         const premiumInfo = (await kv.get(premiumAccessKey)).value || { expires_at: 0 };
         const hasPremiumAccess = user.is_permanent_premium || userId === ADMIN_ID || premiumInfo.expires_at > Date.now();
         if(payload === '1080' && !hasPremiumAccess) {
-             await answerCallbackQuery(callbackQuery.id, "⭐ Premium access is required for 1080p default.");
+             await answerCallbackQuery(callbackQuery.id, "⭐ Premium access is required to set 1080p as default.");
              return;
         }
 
@@ -417,7 +432,6 @@ async function handleSettingsCallbacks(action, payload, chatId, messageId, userI
         const helpMessage = `📖 <b>Help & FAQ</b>
 
 <b>How to Use This Bot:</b>
-
 1️⃣ <b>Search for Music/Videos</b>
 Use the <code>/search</code> command followed by a name (e.g., <code>/search shatta wale on god</code>).
 
@@ -433,6 +447,7 @@ Download in 1080p quality by referring friends or donating. Use /refer to see yo
 ⚙️ Use /settings, /refer, or /feedback for more options.`;
         await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
+    await answerCallbackQuery(callbackQuery.id);
 }
 
 async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
@@ -505,7 +520,6 @@ async function createInlineFormatButtons(videoId, userId) {
     return createFormatButtons(`https://youtu.be/${videoId}`, userId);
 }
 
-
 async function getVideoInfo(youtubeUrl) {
     try {
         const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`);
@@ -551,5 +565,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v58 - Complete Final Version)...");
+console.log("Starting Adiza Downloader Bot (v59 - Final Full Version)...");
 Deno.serve(handler);
