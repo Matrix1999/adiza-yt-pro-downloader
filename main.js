@@ -11,8 +11,6 @@ const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 // --- Deno KV Database ---
 const kv = await Deno.openKv();
 
-//  --unstable-kv   <<< add this on the argument tab @ settings -- build configuration
-
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
@@ -30,20 +28,20 @@ const activeDownloads = new Map();
 
 // --- Main Request Handler ---
 async function handler(req) {
-  if (req.method !== "POST") return new Response("Not Allowed", { status: 405 });
-  if (!BOT_TOKEN) return new Response("Internal Error: BOT_TOKEN not set", { status: 500 });
-  try {
-    const update = await req.json();
-    if (update.callback_query) {
-      await handleCallbackQuery(update.callback_query);
-    } else if (update.message) {
-      await handleMessage(update.message);
+    if (req.method !== "POST") return new Response("Not Allowed", { status: 405 });
+    if (!BOT_TOKEN) return new Response("Internal Error: BOT_TOKEN not set", { status: 500 });
+    try {
+        const update = await req.json();
+        if (update.callback_query) {
+            await handleCallbackQuery(update.callback_query);
+        } else if (update.message) {
+            await handleMessage(update.message);
+        }
+        return new Response("ok");
+    } catch (e) {
+        console.error("Main handler error:", e);
+        return new Response("Error processing update", { status: 500 });
     }
-    return new Response("ok");
-  } catch (e) {
-    console.error("Main handler error:", e);
-    return new Response("Error processing update", { status: 500 });
-  }
 }
 
 // --- Helper: Delay Function ---
@@ -53,19 +51,19 @@ function delay(ms) {
 
 // --- Logic Handlers ---
 async function handleMessage(message) {
-  const chatId = message.chat.id;
-  const text = (message.text || "").trim();
-  const user = message.from;
+    const chatId = message.chat.id;
+    const text = (message.text || "").trim();
+    const user = message.from;
 
-  if (text === "/start") {
-    if (WELCOME_STICKER_IDS.length > 0) {
-        const stickerIndex = stickerCounter % WELCOME_STICKER_IDS.length;
-        await sendSticker(chatId, WELCOME_STICKER_IDS[stickerIndex]);
-        stickerCounter++;
-    }
-    await delay(4000);
-    const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
-    const welcomeMessage = `
+    if (text === "/start") {
+        if (WELCOME_STICKER_IDS.length > 0) {
+            const stickerIndex = stickerCounter % WELCOME_STICKER_IDS.length;
+            await sendSticker(chatId, WELCOME_STICKER_IDS[stickerIndex]);
+            stickerCounter++;
+        }
+        await delay(4000);
+        const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
+        const welcomeMessage = `
 👋 Hello, <b>${user.first_name}</b>!
 
 <b>User ID:</b> <code>${user.id}</code>
@@ -73,31 +71,28 @@ async function handleMessage(message) {
 
 Welcome to Adiza YouTube Downloader! 🌹
 Paste a YouTube link or use the buttons below to get started.
-    `;
-    const inline_keyboard = [
-        [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
-        [{ text: "👑 OWNER 👑", url: OWNER_URL }],
-        [{ text: "💖 Donate 💖", callback_data: "donate_now" }]
-    ];
-    await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
-  
-  } else if (text === "/settings") {
-    const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
-    const inline_keyboard = [
-        [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
-        [{ text: "📊 My Stats", callback_data: "user_stats" }],
-        [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
-    ];
-    await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
-
-  } else if (text === "/donate") {
-    await sendDonationMessage(chatId);
-
-  } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-    await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
-  } else {
-    await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
-  }
+        `;
+        const inline_keyboard = [
+            [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
+            [{ text: "👑 OWNER 👑", url: OWNER_URL }],
+            [{ text: "💖 Donate 💖", callback_data: "donate_now" }]
+        ];
+        await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
+    } else if (text === "/settings") {
+        const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
+        const inline_keyboard = [
+            [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
+            [{ text: "📊 My Stats", callback_data: "user_stats" }],
+            [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
+        ];
+        await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    } else if (text === "/donate") {
+        await sendDonationMessage(chatId);
+    } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
+        await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
+    } else {
+        await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
+    }
 }
 
 async function handleCallbackQuery(callbackQuery) {
@@ -309,5 +304,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v14 - Full Database)...");
+console.log("Starting final professional bot server (v15 - Correct Syntax)...");
 Deno.serve(handler);
