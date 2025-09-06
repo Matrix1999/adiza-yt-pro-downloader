@@ -1,12 +1,12 @@
 // --- Bot Configuration ---
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
-// Corrected the URL by removing the extra backticks
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
+const FETCH_TIMEOUT_MS = 45000; // 45 seconds timeout for downloads
 
 // --- Main Request Handler ---
 async function handler(req) {
@@ -62,54 +62,72 @@ async function handleCallbackQuery(callbackQuery) {
   const [format, videoUrl] = data.split("|");
   
   await answerCallbackQuery(callbackQuery.id, `Processing ${format.toUpperCase()}...`);
-  const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size...</i>`);
+  const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size and duration...</i>`);
 
   try {
     const info = await getVideoInfo(videoUrl);
     const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
-
     const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
-    const headRes = await fetch(downloadUrl, { method: 'HEAD' });
-    const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
-    const fileSizeMB = contentLength / (1024 * 1024);
+
+    // Use fetch with a timeout
+    const fileRes = await fetchWithTimeout(downloadUrl, { method: 'GET' }, FETCH_TIMEOUT_MS);
+    
+    // Since we're streaming, we can't know the size beforehand easily.
+    // Let's download the blob and then check its size.
+    const fileBlob = await fileRes.blob();
+    const fileSizeMB = fileBlob.size / (1024 * 1024);
 
     if (fileSizeMB > 0 && fileSizeMB < MAX_FILE_SIZE_MB) {
-      await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ File is ${fileSizeMB.toFixed(2)}MB. Downloading...</i>`);
-      const fileRes = await fetch(downloadUrl);
-      const fileBlob = await fileRes.blob();
-      
-      await editMessageText(chatId, statusMsg.result.message_id, `<i>Uploading to Telegram...</i>`);
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ File is ${fileSizeMB.toFixed(2)}MB. Uploading to Telegram...</i>`);
       
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
       const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       
-      await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
+      await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded by Adiza Bot`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      // Corrected the messageText variable by removing the extra backticks
-      const messageText = `
-⚠️ <b>File Too Large for Telegram!</b> ⚠️
-
-The selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
-
-Please use the direct download link below.
-      `;
-      const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
-      const inline_keyboard = [[{
-          text: `🔗 Download ${formatDisplay} 🔮`,
-          url: downloadUrl
-      }]];
-
-      await editMessageText(chatId, statusMsg.result.message_id, messageText.trim(), {
-          reply_markup: { inline_keyboard }
-      });
+      // File is too large or download timed out.
+      sendLargeFileLink(chatId, statusMsg.result.message_id, downloadUrl, format, fileSizeMB);
     }
   } catch (error) {
     console.error("Download handling error:", error);
-    // Corrected the error message string
-    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
+    if (error.name === 'AbortError') {
+      // This is our timeout error
+      const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+      sendLargeFileLink(chatId, statusMsg.result.message_id, downloadUrl, format, 0);
+    } else {
+      await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
+    }
   }
+}
+
+// --- NEW HELPER FUNCTIONS ---
+function sendLargeFileLink(chatId, messageId, downloadUrl, format, fileSizeMB) {
+    const messageText = `
+⚠️ <b>File is Too Large or Taking Too Long!</b> ⚠️
+
+The selected file ${fileSizeMB > 0 ? `(${fileSizeMB.toFixed(2)}MB)` : ''} exceeds Telegram's limits or is too slow to process.
+
+Please use the direct download link below.
+    `;
+    const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
+    const inline_keyboard = [[{
+        text: `🔗 Download ${formatDisplay} 🔮`,
+        url: downloadUrl
+    }]];
+
+    editMessageText(chatId, messageId, messageText.trim(), {
+        reply_markup: { inline_keyboard }
+    });
+}
+
+async function fetchWithTimeout(resource, options = {}, timeout) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const response = await fetch(resource, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
 }
 
 async function getVideoInfo(youtubeUrl) {
@@ -132,7 +150,6 @@ async function apiRequest(method, params = {}) {
 }
 
 async function sendTelegramMessage(chatId, text, extraParams = {}) {
-  // Corrected by removing extra backticks at the end
   return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extraParams });
 }
 
@@ -192,5 +209,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v4)...");
+console.log("Starting final professional bot server (v5 with timeout)...");
 Deno.serve(handler);
