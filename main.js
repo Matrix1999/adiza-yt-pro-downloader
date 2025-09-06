@@ -17,6 +17,13 @@ import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
 // --- Deno KV Database ---
 const kv = await Deno.openKv();
 
+// --- Array of Welcome Sticker File IDs ---
+const WELCOME_STICKER_IDS = [
+    "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
+    "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ", "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
+    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE"
+];
+
 // --- State Management ---
 const activeDownloads = new Map();
 const userState = new Map(); // For multi-step commands like /feedback
@@ -40,7 +47,7 @@ async function handler(req) {
 // --- Helper: Delay Function ---
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// --- Logic Handlers (with Referral, Premium, and Feedback Logic) ---
+// --- Logic Handlers (with All Features Integrated) ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -52,7 +59,7 @@ async function handleMessage(message) {
         return;
     }
     
-    // --- Admin Commands ---
+    // Admin commands
     if (userId === ADMIN_ID) {
         if (text.startsWith("/broadcast ")) { await handleBroadcast(message); return; }
         if (text.startsWith("/grant_premium ")) { await grantPremiumAccess(message); return; }
@@ -60,11 +67,10 @@ async function handleMessage(message) {
 
     const [command, payload] = text.split(" ");
     
-    // --- Main Command Router ---
     if (command === "/start") {
         await handleStart(message, payload);
     } else if (command === "/settings") {
-        await sendSettingsMessage(chatId, userId);
+        await sendSettingsMessage(chatId);
     } else if (command === "/donate") {
         await sendDonationMessage(chatId);
     } else if (command === "/refer") {
@@ -80,7 +86,7 @@ async function handleMessage(message) {
         }
     } else {
         // Handle as a direct search query
-        await handleSearch(chatId, text, userId);
+        await handleSearch(chatId, text);
     }
 }
 
@@ -92,7 +98,10 @@ async function handleStart(message, referrerId) {
     const fromNewUser = !(await kv.get(userKey)).value;
 
     if (fromNewUser) {
+        // Initialize new user data
         await kv.set(userKey, { ...user, referrals: 0, premium_credits: 0, is_permanent_premium: false });
+        
+        // Handle referral tracking
         if (referrerId && parseInt(referrerId) !== userId) {
             const referrerKey = ["users", parseInt(referrerId)];
             const referrer = (await kv.get(referrerKey)).value;
@@ -102,7 +111,7 @@ async function handleStart(message, referrerId) {
                 
                 if (newTotalReferrals % REFERRAL_GOAL === 0 && newTotalReferrals > 0) {
                     newCredits += 1;
-                    await sendTelegramMessage(parseInt(referrerId), `🎉 <b>+1 Premium Credit!</b>\n\nYou've successfully referred ${REFERRAL_GOAL} users and earned a credit for <b>7 days</b> of 1080p access. Use it on your next 1080p download!`, {});
+                    await sendTelegramMessage(parseInt(referrerId), `🎉 <b>+1 Premium Credit!</b>\n\nYou've successfully referred ${REFERRAL_GOAL} users and earned a credit for <b>7 days</b> of 1080p access.`, {});
                 }
                 
                 await kv.set(referrerKey, { ...referrer, referrals: newTotalReferrals, premium_credits: newCredits });
@@ -110,9 +119,22 @@ async function handleStart(message, referrerId) {
         }
     }
     
+    // --- Sticker Sending Logic Restored ---
+    if (WELCOME_STICKER_IDS.length > 0) {
+        const stickerCount = (await kv.get(["global", "stickerCounter"])).value || 0;
+        await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
+        await kv.set(["global", "stickerCounter"], stickerCount + 1);
+    }
+    await delay(4000);
+    
     // Send welcome photo and message
+    const userDb = (await kv.get(userKey)).value || {};
+    const userStatus = userDb.is_permanent_premium ? "⭐ Premium User" : "👤 Standard User";
     const welcomeMessage = `
 👋 Hello, <b>${user.first_name}</b>!
+
+<b>User ID:</b> <code>${user.id}</code>
+<b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
 Simply send a song or video name to get started.
@@ -125,7 +147,7 @@ Simply send a song or video name to get started.
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
 }
 
-async function handleSearch(chatId, query, userId) {
+async function handleSearch(chatId, query) {
     await sendTelegramMessage(chatId, `🔍 Searching for: <b>${query}</b>...`);
     const searchResults = await searchYoutube(query);
 
@@ -148,21 +170,28 @@ async function handleSearch(chatId, query, userId) {
 async function sendReferralMessage(chatId, userId) {
     const referralLink = `https://t.me/${BOT_USERNAME}?start=${userId}`;
     const user = (await kv.get(["users", userId])).value || { referrals: 0, premium_credits: 0 };
+    const premiumInfo = (await kv.get(["premium_access", userId])).value || { expires_at: 0 };
     const referrals = user.referrals || 0;
     const credits = user.premium_credits || 0;
     const nextCreditProgress = referrals % REFERRAL_GOAL;
+
+    let status = `Progress to next credit: ${nextCreditProgress}/${REFERRAL_GOAL}`;
+    if (premiumInfo.expires_at > Date.now()) {
+        const expiryDate = new Date(premiumInfo.expires_at).toLocaleString();
+        status = `<b>Active Premium:</b> Expires on ${expiryDate}`;
+    }
 
     let message = `
 🤝 <b>Invite & Earn Premium Credits!</b>
 
 Share your unique link. For every <b>${REFERRAL_GOAL} friends</b> who join, you'll earn <b>1 Premium Credit</b>.
 
-Each credit unlocks <b>7 days</b> of 1080p downloads.
+Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of 1080p downloads.
 
-<b>Your Progress:</b>
+<b>Your Status:</b>
 - Total Referrals: ${referrals}
 - Premium Credits Available: ${credits}
-- Progress to next credit: ${nextCreditProgress}/${REFERRAL_GOAL}
+- ${status}
 
 Your personal link:
 <code>${referralLink}</code>
@@ -182,6 +211,7 @@ async function handleFeedbackSubmission(message) {
     userState.delete(userId);
 }
 
+// --- Admin Commands ---
 async function grantPremiumAccess(message) {
     const targetId = parseInt(message.text.split(" ")[1]);
     if (isNaN(targetId)) {
@@ -265,11 +295,13 @@ async function handleCallbackQuery(callbackQuery) {
         await editMessageText("❌ Download Canceled.", { chat_id: privateChatId, message_id: message.message_id });
         return;
     }
-    if (action.startsWith("settings") || action.startsWith("back_to_")) {
+
+    if (action.startsWith("settings") || action === "back_to_settings" || action.startsWith("set_default") || action === "user_stats" || action === "help_menu") {
         await handleSettingsCallbacks(action, payload, privateChatId, message.message_id, userId);
         await answerCallbackQuery(callbackQuery.id);
         return;
     }
+
     if (action === "donate_now") {
         await sendDonationMessage(privateChatId);
         await answerCallbackQuery(callbackQuery.id);
@@ -309,23 +341,31 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
     const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
     const controller = new AbortController();
     activeDownloads.set(downloadKey, controller);
+    const cancelBtn = { text: "❌ Cancel", callback_data: `cancel|${downloadKey}` };
     const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
 
     try {
-        if (!isInline) await editMessageText(`🔎 Analyzing link...`, editTarget);
+        if (!isInline) await editMessageText(`🔎 Analyzing link...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
         
         const info = await getVideoInfo(videoUrl);
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        if (!isInline) await editMessageText(`⏳ Download in progress...`, editTarget);
+        if (!isInline) await editMessageText(`⏳ Download in progress...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
 
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
-        if (!fileRes.ok) throw new Error(`Download server failed: ${fileRes.status}.`);
+        
+        if (!fileRes.ok) {
+            const errorText = await fileRes.text();
+            console.error("Worker API Error:", errorText);
+            throw new Error(`Download server failed: ${fileRes.status}. Check worker logs.`);
+        }
 
         const fileBlob = await fileRes.blob();
         if (fileBlob.size / (1024 * 1024) > MAX_FILE_SIZE_MB) {
-             await editMessageText(`⚠️ <b>File Is Too Large!</b>`, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+             const messageText = `⚠️ <b>File Is Too Large!</b> (${(fileBlob.size / (1024 * 1024)).toFixed(2)} MB)`;
+             if (isInline) await sendTelegramMessage(chatId, messageText);
+             else await editMessageText(messageText, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
              return; 
         }
 
@@ -352,43 +392,76 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
 }
 
 
-// --- Other Handlers & UI Functions ---
-async function handleInlineQuery(inlineQuery) {
-    const query = inlineQuery.query.trim();
-    if (!query) return;
-    const searchResults = await searchYoutube(query);
-    const results = searchResults.map(video => ({
-        type: 'article',
-        id: video.id,
-        title: video.title,
-        description: `Duration: ${video.length.simpleText}`,
-        thumb_url: video.thumbnail.url,
-        input_message_content: { message_text: `🎨𝗬𝗼𝘂 𝘀𝗲𝗹𝗲𝗰𝘁𝗲𝗱: ${video.title}` },
-        reply_markup: { inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]] }
-    }));
-    await apiRequest('answerInlineQuery', { inline_query_id: inlineQuery.id, results: JSON.stringify(results), cache_time: 300 });
-}
+// --- Helper & UI Functions ---
+async function handleSettingsCallbacks(action, payload, chatId, messageId, userId) {
+    if (action === "settings_menu") { await deleteMessage(chatId, messageId); await sendSettingsMessage(chatId); }
+    else if (action === "settings_quality") {
+        const userQuality = (await kv.get(["users", userId, "quality"])).value;
+        await editMessageText("Choose your default quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality, userId) } });
+    } else if (action === "set_default") {
+        payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+        const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+        await editMessageText("Default quality updated!", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality, userId) } });
+    } else if (action === "user_stats") {
+        const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+        await editMessageText(`📊 <b>Your Stats</b>\n\nTotal Downloads: ${downloads}`, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "back_to_settings" }]] } });
+    } else if (action === "back_to_settings") { await sendSettingsMessage(chatId, messageId, true); }
+    else if (action === "help_menu") { 
+        const helpMessage = `📖 <b>Help & FAQ</b>
 
-async function searchYoutube(query) {
-    try {
-        const response = await YouTube.GetListByKeyword(query, false, 15, [{type: 'video'}]);
-        return response.items || [];
-    } catch (error) {
-        console.error("YouTube search error:", error);
-        return [];
+<b>Three Ways to Use This Bot:</b>
+
+1️⃣ <b>Direct Search (Easiest)</b>
+Just send me any song or video name (e.g., <i>shatta wale on god</i>). I'll show you the top results to download.
+
+2️⃣ <b>Pasting a Link</b>
+Send a valid YouTube link directly to me.
+
+3️⃣ <b>Inline Mode (In Any Chat)</b>
+In any other chat, type <code>@${BOT_USERNAME}</code> followed by a search term.
+
+⭐ <b>Premium Access</b>
+Download in 1080p quality by referring friends or donating. Use /refer to see your progress.
+
+⚙️ Use /settings, /refer, or /feedback for more options.`;
+        await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
 }
 
-async function handleSettingsCallbacks(action, payload, chatId, messageId, userId) {
-    // This function needs to be defined to handle settings callbacks
+async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
+    const settingsMessage = "⚙️ <b>User Settings</b>";
+    const inline_keyboard = [
+        [{ text: "⚙️ Default Quality", callback_data: "settings_quality" }],
+        [{ text: "📊 My Stats", callback_data: "user_stats" }],
+        [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
+    ];
+    if (shouldEdit) await editMessageText(settingsMessage, { chat_id: chatId, message_id: messageIdToUpdate, reply_markup: { inline_keyboard } });
+    else await sendTelegramMessage(chatId, settingsMessage, { reply_markup: { inline_keyboard } });
 }
 
 async function sendDonationMessage(chatId) {
-    await sendTelegramMessage(chatId, `💖 <b>Support Adiza Bot!</b>\n\nYour support helps cover server costs. Click below to make a secure donation.`, { reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
+    await sendTelegramMessage(chatId, `💖 <b>Support Adiza Bot!</b>\n\nYour support helps cover server costs. After donating, please contact the admin to receive lifetime premium access.`, { reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
 }
 
-async function sendSettingsMessage(chatId, userId) {
-    // This function needs to be defined to show the settings menu
+async function createQualitySettingsButtons(currentQuality, userId) {
+    const userKey = ["users", userId];
+    const premiumAccessKey = ["premium_access", userId];
+    const user = (await kv.get(userKey)).value || {};
+    const premiumInfo = (await kv.get(premiumAccessKey)).value || { expires_at: 0 };
+    
+    const hasPremiumAccess = user.is_permanent_premium || userId === ADMIN_ID || premiumInfo.expires_at > Date.now();
+
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const icons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
+    let buttons = formats.map(f => {
+        let text = `${currentQuality === f ? "✅ " : ""}${icons[f]} ${f.toUpperCase()}`;
+        if (f === '1080' && !hasPremiumAccess) text = `⭐ ${text}`;
+        return { text, callback_data: `set_default|${f}` };
+    });
+    let rows = [];
+    while (buttons.length > 0) rows.push(buttons.splice(0, 3));
+    rows.push([{ text: "❌ Remove Default", callback_data: "set_default|remove" }, { text: "🔙 Back", callback_data: "back_to_settings" }]);
+    return rows;
 }
 
 async function createFormatButtons(videoUrl, userId) {
@@ -422,7 +495,6 @@ async function createFormatButtons(videoUrl, userId) {
 }
 
 async function createInlineFormatButtons(videoId, userId) {
-    // Same logic as createFormatButtons, but for inline mode
     return createFormatButtons(`https://youtu.be/${videoId}`, userId);
 }
 
@@ -472,5 +544,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v55 - Credit System Final)...");
+console.log("Starting Adiza Downloader Bot (v56 - Final Full Version)...");
 Deno.serve(handler);
