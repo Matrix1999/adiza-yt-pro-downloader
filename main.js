@@ -96,7 +96,7 @@ Paste a YouTube link or use the buttons below to get started.
 }
 
 async function handleCallbackQuery(callbackQuery) {
-    const { data, message, from, inline_message_id } = callbackQuery;
+    const { data, message, from } = callbackQuery;
     const userId = from.id;
     const [action, ...payloadParts] = data.split("|");
     const payload = payloadParts.join("|");
@@ -128,8 +128,8 @@ async function handleCallbackQuery(callbackQuery) {
 
         if (action === "settings_menu") {
             await answerCallbackQuery(callbackQuery.id);
-            await deleteMessage(privateChatId, message.message_id); // Delete the old message
-            await sendSettingsMessage(privateChatId); // Send a new settings message
+            await deleteMessage(privateChatId, message.message_id); 
+            await sendSettingsMessage(privateChatId);
             return;
         }
         
@@ -168,9 +168,9 @@ async function handleCallbackQuery(callbackQuery) {
         }
 
         if (action === "help_menu") {
-            const helpMessage = "📖 **Help & FAQ**\n\nTo use this bot, simply send a valid YouTube link. If you have a default quality set, the download will begin automatically. Otherwise, you'll be prompted to choose a format.\n\n⚙️ Use the **/settings** command to set or remove your default download quality and to check your usage statistics.";
+            const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
             const helpKeyboard = [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]];
-            await editMessageText(privateChatId, message.message_id, helpMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: helpKeyboard } });
+            await editMessageText(privateChatId, message.message_id, helpMessage, { reply_markup: { inline_keyboard: helpKeyboard } });
             return;
         }
 
@@ -192,7 +192,7 @@ async function handleInlineQuery(inlineQuery) {
             title: video.snippet.title,
             thumb_url: video.snippet.thumbnails.default.url,
             input_message_content: {
-                message_text: `You selected: *${video.snippet.title}*\n\nNow, choose a format below to download.`
+                message_text: `*You selected:* ${video.snippet.title}\n\nChoose a format below to download.`
             },
             reply_markup: {
                 inline_keyboard: [
@@ -208,14 +208,14 @@ async function handleInlineQuery(inlineQuery) {
     await apiRequest('answerInlineQuery', {
         inline_query_id: inlineQuery.id,
         results: JSON.stringify(results),
-        cache_time: 300 // 5 minutes
+        cache_time: 300 
     });
 }
 
-// --- Broadcast Handler (New Workflow) ---
+// --- Broadcast Handler ---
 async function handleBroadcast(message) {
     if (!message.reply_to_message) {
-        await sendTelegramMessage(message.chat.id, "⚠️ **Broadcast Error**\nPlease reply to the message (text, photo, or video) you want to broadcast and then type `/broadcast`.");
+        await sendTelegramMessage(message.chat.id, "⚠️ 𝗕𝗿𝗼𝗮𝗱𝗰𝗮𝘀𝘁 𝗘𝗿𝗿𝗼𝗿\nPlease reply to the message (text, photo, or video) you want to broadcast and then type `/broadcast`.");
         return;
     }
 
@@ -239,7 +239,7 @@ async function handleBroadcast(message) {
         } catch (e) {
             console.error(`Failed to broadcast to user ${userId}:`, e.message);
         }
-        await delay(100); // 10 messages per second to avoid hitting rate limits
+        await delay(100); 
     }
     await sendTelegramMessage(message.chat.id, `✅ **Broadcast Complete!**\nSuccessfully sent to ${successCount} out of ${users.length} users.`);
 }
@@ -247,8 +247,6 @@ async function handleBroadcast(message) {
 
 // --- YouTube Search for Inline Mode (Placeholder) ---
 async function searchYoutube(query) {
-    // IMPORTANT: This is a placeholder. You need to replace this with a real YouTube Search API.
-    // You can use libraries like 'youtube-search-api' or call the Google API directly.
     console.log("YouTube search is a placeholder. Replace with a real API for full functionality.");
     return [{
         id: { videoId: "dQw4w9WgXcQ" },
@@ -282,7 +280,7 @@ async function startDownload(chatId, userId, videoUrl, format) {
         if (fileSizeMB > MAX_FILE_SIZE_MB) {
              const messageText = `⚠️ <b>File Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\nPlease use the direct link to download.`;
              await editMessageText(chatId, statusMsg.result.message_id, messageText, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]] } });
-             return; // Stop execution
+             return; 
         }
 
         await editMessageText(chatId, statusMsg.result.message_id, `🚀 Downloading to our server...`, { reply_markup: { inline_keyboard: [[cancelBtn]] } });
@@ -427,7 +425,7 @@ function createFormatButtons(videoUrl) {
     let rows = [], currentRow = [];
     formats.forEach(f => {
         const quality = f.toLowerCase().replace('p', '');
-        const icon = formatMap[f] || '💾';
+        const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
@@ -439,5 +437,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v24 - Feature Complete)...");
+console.log("Starting final professional bot server (v25 - Feature Complete)...");
 Deno.serve(handler);
