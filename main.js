@@ -54,6 +54,7 @@ async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
     const user = message.from;
+    const userId = user.id;
 
     if (text === "/start") {
         if (WELCOME_STICKER_IDS.length > 0) {
@@ -78,12 +79,22 @@ Paste a YouTube link or use the buttons below to get started.
             [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
+    
     } else if (text === "/settings") {
         await sendSettingsMessage(chatId);
+    
     } else if (text === "/donate") {
         await sendDonationMessage(chatId);
+    
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-        await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
+        const userQuality = (await kv.get(["users", userId, "quality"])).value;
+        if (userQuality) {
+            // User has a default quality, start download immediately
+            await startDownload(chatId, userId, text, userQuality);
+        } else {
+            // No default, show format buttons
+            await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
+        }
     } else {
         await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
     }
@@ -112,23 +123,29 @@ async function handleCallbackQuery(callbackQuery) {
     }
 
     if (action === "settings_menu") {
-        await sendSettingsMessage(chatId);
+        await sendSettingsMessage(chatId, message.message_id);
         await answerCallbackQuery(callbackQuery.id);
         return;
     }
     
     if (action === "settings_quality") {
-        const qualityKeyboard = [
-            [{ text: "🎵 MP3", callback_data: "set_default|mp3" }, { text: "📺 720p", callback_data: "set_default|720" }],
-            [{ text: "💎 1080p", callback_data: "set_default|1080" }, { text: "🔙 Back to Settings", callback_data: "back_to_settings" }]
-        ];
+        const userQuality = (await kv.get(["users", userId, "quality"])).value;
+        const qualityKeyboard = createQualitySettingsButtons(userQuality);
         await editMessageText(chatId, message.message_id, "Please choose your preferred default download quality:", { reply_markup: { inline_keyboard: qualityKeyboard } });
         return;
     }
 
     if (action === "set_default") {
-        await kv.set(["users", userId, "quality"], payload);
-        await answerCallbackQuery(callbackQuery.id, `✅ Your default quality has been set to ${payload.toUpperCase()}.`);
+        if (payload === "remove") {
+            await kv.delete(["users", userId, "quality"]);
+            await answerCallbackQuery(callbackQuery.id, `✅ Your default quality has been removed.`);
+        } else {
+            await kv.set(["users", userId, "quality"], payload);
+            await answerCallbackQuery(callbackQuery.id, `✅ Your default quality has been set to ${payload.toUpperCase()}.`);
+        }
+        const userQuality = (await kv.get(["users", userId, "quality"])).value;
+        const qualityKeyboard = createQualitySettingsButtons(userQuality);
+        await editMessageText(chatId, message.message_id, "Please choose your preferred default download quality:", { reply_markup: { inline_keyboard: qualityKeyboard } });
         return;
     }
 
@@ -141,27 +158,25 @@ async function handleCallbackQuery(callbackQuery) {
     }
     
     if (action === "back_to_settings") {
-        const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
-        const inline_keyboard = [
-            [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
-            [{ text: "📊 My Stats", callback_data: "user_stats" }],
-            [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
-        ];
-        await editMessageText(chatId, message.message_id, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+        await sendSettingsMessage(chatId, message.message_id);
         return;
     }
 
     if (action === "help_menu") {
-        const helpMessage = "❔ **Help & FAQ**\n\nTo use this bot, simply send a valid YouTube link. You will be given options to download the content as either video or audio.\n\nUse the **/settings** command to set your default download quality or to check your usage statistics.";
+        const helpMessage = "❔ **Help & FAQ**\n\nTo use this bot, simply send a valid YouTube link. If you have a default quality set, the download will begin automatically. Otherwise, you'll be prompted to choose a format.\n\nUse the **/settings** command to set or remove your default download quality and to check your usage statistics.";
         const helpKeyboard = [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]];
         await editMessageText(chatId, message.message_id, helpMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: helpKeyboard } });
         return;
     }
 
-    const videoUrl = payload;
-    const format = action;
+    const [format, videoUrl] = data.split("|");
+    await startDownload(chatId, userId, videoUrl, format);
+    await deleteMessage(chatId, message.message_id);
+}
 
-    const statusMsg = await sendTelegramMessage(chatId, `<i>⏳ Processing request...</i>`);
+// --- Main Download Logic ---
+async function startDownload(chatId, userId, videoUrl, format) {
+    const statusMsg = await sendTelegramMessage(chatId, `<i>⏳ Processing ${format.toUpperCase()}...</i>`);
     const downloadKey = `${chatId}:${statusMsg.result.message_id}`;
     const controller = new AbortController();
     activeDownloads.set(downloadKey, controller);
@@ -217,14 +232,37 @@ Click the button below to make a secure donation via Paystack.
     await sendTelegramMessage(chatId, donateMessage.trim(), { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
 }
 
-async function sendSettingsMessage(chatId) {
+async function sendSettingsMessage(chatId, messageId = null) {
     const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
     const inline_keyboard = [
         [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
         [{ text: "📊 My Stats", callback_data: "user_stats" }],
         [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
     ];
-    await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    if (messageId) {
+        await editMessageText(chatId, messageId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    } else {
+        await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    }
+}
+
+function createQualitySettingsButtons(currentQuality) {
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
+    
+    let buttons = formats.map(f => {
+        const label = formatLabels[f];
+        const text = currentQuality === f ? `✅ ${label}` : label;
+        return { text, callback_data: `set_default|${f}` };
+    });
+
+    let rows = [];
+    while (buttons.length > 0) {
+        rows.push(buttons.splice(0, 3));
+    }
+    
+    rows.push([{ text: "❌ Remove Default", callback_data: "set_default|remove" }, { text: "🔙 Back to Settings", callback_data: "back_to_settings" }]);
+    return rows;
 }
 
 async function getVideoInfo(youtubeUrl) {
@@ -297,7 +335,7 @@ function createFormatButtons(videoUrl) {
     const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '⚡', '360p': '🔮', '480p': '📺', '720p': '🗳', '1080p': '💎' };
     let rows = [], currentRow = [];
     formats.forEach(f => {
-        const quality = f.toLowerCase() === 'mp3' ? 'mp3' : f.toLowerCase().replace('p', '');
+        const quality = f.toLowerCase().replace('p', '');
         const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
@@ -310,5 +348,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v18 - Final UI)...");
+console.log("Starting final professional bot server (v19 - Smart Defaults)...");
 Deno.serve(handler);
