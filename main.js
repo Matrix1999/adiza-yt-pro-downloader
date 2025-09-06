@@ -6,8 +6,7 @@ const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
-// --- NEW: Add your Paystack Payment Page link here ---
-const DONATE_URL = "https://paystack.shop/pay/adiza-bot-donate"; // <-- IMPORTANT: Replace this
+const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
@@ -15,8 +14,9 @@ const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ", "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
     "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE", "CAACAgUAAxkBAAE6q7dou5WIlhBfKD6h3wWmZpoePIGWSAACDBEAApkMcFRMS-HQnAqmzzYE",
     "CAACAgUAAxkBAAE6q7lou5WM-I1TWj6Z5u6iER70yqszCQACphgAAnLIyFeyFwmm5dR_8zYE", "CAACAgUAAxkBAAE6q7tou5WR18mZRfVWpSXXMevkTKoTKAAC7BAAAkSw2FQUETd0uSTUdTYE",
-    "CAACAgUAAxkBAAE6q71ou5XOmUTrhmn8-jWpplgzJ-fxcwACdxEAAk7CIFXNdisJ2fejnTYE", "CAACAgUAAxkBAAE6q79ou5Xa16ci77HKeE53XaQ_C4wqKAACXRAAAtGVYVQB72w7kFjy1jYE",
-    "CAACAgUAAxkBAAE6q8Fou5XlYVE8etdE36V1cvEWyhQM-gACLhEAAoaQCVeBaEKoltXVFzYE", "CAACAgUAAxkBAAE6q8Nou5X-WlD8j5XFxMCjfHcel3GNdQACRQADunh9JkKCie3gP8QLNgQ"
+    "CAACAgUAAxkBAAE6q71ou5XOmUTrhmn8-jWpplgzJ-fxcwACdxEAAk7CIFXNdisJ2fejnTYE",
+    "CAACAgUAAxkBAAE6q79ou5Xa16ci77HKeE53XaQ_C4wqKAACXRAAAtGVYVQB72w7kFjy1jYE", "CAACAgUAAxkBAAE6q8Fou5XlYVE8etdE36V1cvEWyhQM-gACLhEAAoaQCVeBaEKoltXVFzYE",
+    "CAACAgUAAxkBAAE6q8Nou5X-WlD8j5XFxMCjfHcel3GNdQACRQADunh9JkKCie3gP8QLNgQ"
 ];
 
 // --- State Management ---
@@ -59,7 +59,9 @@ async function handleMessage(message) {
         stickerCounter++;
     }
     await delay(4000);
+    
     const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
+    // --- UPDATED Welcome Message ---
     const welcomeMessage = `
 👋 Hello, <b>${user.first_name}</b>!
 
@@ -67,11 +69,13 @@ async function handleMessage(message) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Paste a YouTube link, use /settings, or /donate to support us.
+Paste a YouTube link or use the buttons below to get started.
     `;
+    // --- UPDATED Inline Keyboard with Donate Button ---
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
-        [{ text: "👑 OWNER 👑", url: OWNER_URL }]
+        [{ text: "👑 OWNER 👑", url: OWNER_URL }],
+        [{ text: "💖 Donate 💖", callback_data: "donate_now" }]
     ];
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
@@ -79,21 +83,7 @@ Paste a YouTube link, use /settings, or /donate to support us.
     await sendTelegramMessage(chatId, "⚙️ *User Settings*\n\n_This feature is coming soon!_", { parse_mode: 'Markdown' });
 
   } else if (text === "/donate") {
-    const donateMessage = `
-💖 **Support Adiza Bot!**
-
-Thank you for considering a donation! Your support helps cover server costs and allows me to keep adding new features.
-
-Click the button below to make a secure donation via Paystack.
-    `;
-    const inline_keyboard = [[{
-        text: "💳 Donate with Paystack",
-        url: DONATE_URL
-    }]];
-    await sendTelegramMessage(chatId, donateMessage.trim(), {
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard }
-    });
+    await sendDonationMessage(chatId);
 
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
     await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
@@ -114,6 +104,13 @@ async function handleCallbackQuery(callbackQuery) {
           activeDownloads.delete(payload);
       }
       await editMessageText(chatId, message.message_id, "<i>❌ Download Canceled.</i>");
+      return;
+  }
+  
+  // --- NEW: Handle Donate Button Callback ---
+  if (action === "donate_now") {
+      await sendDonationMessage(chatId);
+      await answerCallbackQuery(callbackQuery.id);
       return;
   }
   
@@ -163,6 +160,25 @@ async function handleCallbackQuery(callbackQuery) {
   } finally {
       activeDownloads.delete(downloadKey);
   }
+}
+
+// --- NEW Donation Helper Function ---
+async function sendDonationMessage(chatId) {
+    const donateMessage = `
+💖 **Support Adiza Bot!**
+
+Thank you for considering a donation! Your support helps cover server costs and allows me to keep adding new features.
+
+Click the button below to make a secure donation via Paystack.
+    `;
+    const inline_keyboard = [[{
+        text: "💳 Donate with Paystack",
+        url: DONATE_URL
+    }]];
+    await sendTelegramMessage(chatId, donateMessage.trim(), {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+    });
 }
 
 async function getVideoInfo(youtubeUrl) {
@@ -248,5 +264,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v11 - Donate Feature)...");
+console.log("Starting final professional bot server (v12 - Final UI)...");
 Deno.serve(handler);
