@@ -8,9 +8,6 @@ const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 
-// --- Deno KV Database ---
-const kv = await Deno.openKv();
-
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
@@ -79,13 +76,7 @@ Paste a YouTube link or use the buttons below to get started.
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
     } else if (text === "/settings") {
-        const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
-        const inline_keyboard = [
-            [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
-            [{ text: "📊 My Stats", callback_data: "user_stats" }],
-            [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
-        ];
-        await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+        await sendTelegramMessage(chatId, "⚙️ Settings feature coming soon! For now, enjoy the fast downloads. 🚀");
     } else if (text === "/donate") {
         await sendDonationMessage(chatId);
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
@@ -114,44 +105,6 @@ async function handleCallbackQuery(callbackQuery) {
     if (action === "donate_now") {
         await sendDonationMessage(chatId);
         await answerCallbackQuery(callbackQuery.id);
-        return;
-    }
-
-    if (action === "settings_quality") {
-        const qualityKeyboard = [
-            [{ text: "🎵 MP3", callback_data: "set_default|mp3" }, { text: "📺 720p", callback_data: "set_default|720" }],
-            [{ text: "💎 1080p", callback_data: "set_default|1080" }, { text: "🔙 Back to Settings", callback_data: "back_to_settings" }]
-        ];
-        await editMessageText(chatId, message.message_id, "Please choose your preferred default download quality:", { reply_markup: { inline_keyboard: qualityKeyboard } });
-        return;
-    }
-
-    if (action === "set_default") {
-        await kv.set(["users", userId, "quality"], payload);
-        await answerCallbackQuery(callbackQuery.id, `✅ Your default quality has been set to ${payload.toUpperCase()}.`);
-        return;
-    }
-
-    if (action === "user_stats") {
-        const downloads = await kv.get(["users", userId, "downloads"]);
-        const statsMessage = `📊 **Your Stats**\n\n*Total Downloads:* ${downloads.value || 0}`;
-        await editMessageText(chatId, message.message_id, statsMessage, { parse_mode: 'Markdown' });
-        return;
-    }
-    
-    if (action === "back_to_settings") {
-        const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
-        const inline_keyboard = [
-            [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
-            [{ text: "📊 My Stats", callback_data: "user_stats" }],
-            [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
-        ];
-        await editMessageText(chatId, message.message_id, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
-        return;
-    }
-
-    if (action === "help_menu") {
-        await answerCallbackQuery(callbackQuery.id, "Send a YouTube link to get started. Use /settings to change your preferences.");
         return;
     }
 
@@ -184,10 +137,6 @@ async function handleCallbackQuery(callbackQuery) {
             const fileName = `${safeTitle}.${fileType}`;
             await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
             await deleteMessage(chatId, statusMsg.result.message_id);
-
-            // Increment user's download count
-            await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
-
         } else {
             const messageText = `⚠️ <b>File Too Large!</b>\nThe file is ${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'too big'}. Please use the direct link.`;
             await editMessageText(chatId, statusMsg.result.message_id, messageText, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]] } });
@@ -304,5 +253,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v15 - Correct Syntax)...");
+console.log("Starting professional bot server (v16 - No KV)...");
 Deno.serve(handler);
