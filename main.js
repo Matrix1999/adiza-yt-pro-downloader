@@ -3,7 +3,8 @@ const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
-const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
+const CHANNEL_URL = "https://t.me/QueenAdiza";
+const BOT_USERNAME = "adiza_ytdownloader_bot"; // Your bot's username
 const MAX_FILE_SIZE_MB = 49;
 
 // --- Main Request Handler ---
@@ -44,7 +45,6 @@ Paste a YouTube link to get started.
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-    // SIMPLIFIED: Directly show format buttons without fetching info first.
     const keyboard = createFormatButtons(text);
     await sendTelegramMessage(chatId, "Please choose a format to download:", {
       reply_markup: { inline_keyboard: keyboard }
@@ -64,6 +64,10 @@ async function handleCallbackQuery(callbackQuery) {
   const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size...</i>`);
 
   try {
+    // Fetch video title for the filename
+    const info = await getVideoInfo(videoUrl);
+    const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
+
     const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
     const headRes = await fetch(downloadUrl, { method: 'HEAD' });
     const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
@@ -77,8 +81,10 @@ async function handleCallbackQuery(callbackQuery) {
       await editMessageText(chatId, statusMsg.result.message_id, `<i>Uploading to Telegram...</i>`);
       
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-      const fileName = `${fileType}_${Date.now()}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
-      await sendMedia(chatId, fileBlob, fileType, `Downloaded via @${message.chat.username || 'AdizaBot'}`, fileName);
+      const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
+      
+      // Send the media with the correct caption and filename
+      await sendMedia(chatId, fileBlob, fileType, `Via @${BOT_USERNAME}`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
@@ -90,6 +96,20 @@ async function handleCallbackQuery(callbackQuery) {
     await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
   }
 }
+
+// --- NEW HELPER to get video info from a public API ---
+async function getVideoInfo(youtubeUrl) {
+    try {
+        const response = await fetch(`https://www.youtube.com/oembed?url=${youtubeUrl}&format=json`);
+        if (!response.ok) return { title: null };
+        const data = await response.json();
+        return { title: data.title };
+    } catch (e) {
+        console.error("oEmbed fetch failed:", e);
+        return { title: null };
+    }
+}
+
 
 // --- Telegram API Helpers ---
 async function apiRequest(method, params = {}) {
@@ -118,11 +138,19 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
-async function sendMedia(chatId, blob, type, caption, fileName) {
+// UPDATED sendMedia function
+async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
+    
+    // Set the title for MP3 files
+    if (type === 'audio') {
+        formData.append('title', title);
+        formData.append('performer', `Via @${BOT_USERNAME}`);
+    }
+
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
     await fetch(url, { method: 'POST', body: formData });
 }
@@ -133,9 +161,9 @@ function createFormatButtons(videoUrl) {
     let rows = [], currentRow = [];
     
     formats.forEach(f => {
-        const quality = f.toLowerCase();
-        const icon = formatMap[quality] || '💾';
-        currentRow.push({ text: `${icon} ${quality.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
+        const quality = f.toLowerCase().replace('p', '');
+        const icon = formatMap[f.toLowerCase()] || '💾';
+        currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
             currentRow = [];
@@ -146,5 +174,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting simplified, stable bot server...");
+console.log("Starting final stable bot server...");
 Deno.serve(handler);
