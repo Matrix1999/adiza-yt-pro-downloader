@@ -104,6 +104,9 @@ async function handleMessage(message) {
         case "/premium_member":
             await sendPremiumMemberMessage(chatId);
             break;
+        case "/premium_hub":
+            await handlePremiumHubRequest(chatId, userId);
+            break;
         case "/feedback":
             await requestFeedback(chatId, userId);
             break;
@@ -176,18 +179,19 @@ async function handleStart(message, referrerId) {
     await kv.set(["global", "photoCounter"], photoCount + 1);
 
     const welcomeMessage = `
-👋 ʜᴇʟʟᴏ, <b>${user.first_name}</b>!
+👋 Hello, <b>${user.first_name}</b>!
 
 <b>User ID:</b> <code>${user.id}</code>
 <b>Status:</b> ${userStatus}
 
-ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴅɪᴢᴀ ʏᴏᴜᴛᴜʙᴇ & ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ! 🌹
-sᴇɴᴅ ᴀ ʏᴏᴜᴛᴜʙᴇ ᴏʀ ᴛɪᴋᴛᴏᴋ ʟɪɴᴋ, ᴏʀ ᴜsᴇ /settings ᴛᴏ sᴇᴇ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
+Welcome to Adiza YouTube & TikTok Downloader! 🌹
+Send a YouTube or TikTok link, or use /settings to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
         [{ text: "👑 OWNER 👑", url: OWNER_URL }],
-        [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
+        [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }],
+        [{ text: "💎 Premium Hub", callback_data: "premium_hub" }]
     ];
     await sendPhoto(chatId, currentPhotoUrl, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
 }
@@ -257,39 +261,63 @@ Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 108
 
 async function sendPremiumMemberMessage(chatId) {
     const premiumMessage = `
-💎 <b>𝗟𝗶𝗳𝗲𝘁𝗶𝗺𝗲 𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗠𝗲𝗺𝗯𝗲𝗿!</b> 💎
+💎 <b>Become a Lifetime Premium Member!</b> 💎
 
-Support the bot's development and server costs with a one-time donation of your choice to get 𝗹𝗶𝗳𝗲𝘁𝗶𝗺𝗲 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀 to all our services—both current and all future updates!
+Support the bot's development and server costs with a one-time donation of your choice to get **lifetime premium access** to all our services—both current and all future updates!
 
-✨𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗕𝗲𝗻𝗲𝗳𝗶𝘁𝘀:
-- 🎬 Unlimited 1080p Youtube Downloads. 
-- 🚀 Unlimited HD TikTok Downloads. 
-- ⚡ Priority access to new features.
-- 👑 A special "Premium User" status.
-- ⌛ VIP Support. 
+✨ **Your Premium Benefits:**
+- 🎬 Unlimited 1080p Full HD downloads from YouTube.
+- 🚀 Unlimited HD video downloads (no watermark) from TikTok.
+- ⚡ Priority access to new features as they are released.
+- 👑 A special "Premium User" status on your profile.
 
-🎁 𝗘𝘅𝗰𝗹𝘂𝘀𝗶𝘃𝗲 𝗙𝘂𝘁𝘂𝗿𝗲 𝗔𝗰𝗰𝗲𝘀𝘀 𝗳𝗼𝗿 𝗗𝗼𝗻𝗼𝗿𝘀:
+🎁 **Exclusive Future Access for Donors:**
 As a lifetime member, you will automatically get access to our upcoming premium services, including:
-
-•• 🍿 Netflix Logins
-
-•• 🎨 Canva Pro Logins
-
-•• 🥏 Showmax Logins
-
-•• 💡 Prime Video Logins
-
-💎 And many more!
+- Netflix Logins
+- Canva Pro Accounts
+- Showmax Logins
+- Prime Video Logins
+- ...and many more!
 
 To get started, simply make a donation of any amount you wish through our secure Paystack link. After donating, please contact the admin with a screenshot of your receipt to activate your lifetime access.
 
-Thank u for your incredible support!❤️
+Thank you for your incredible support! ❤️
     `;
     const inline_keyboard = [
         [{ text: "💳 Donate Now for Lifetime Access", url: DONATE_URL }],
         [{ text: "👑 Contact Admin After Donating", url: OWNER_URL }]
     ];
     await sendTelegramMessage(chatId, premiumMessage.trim(), { reply_markup: { inline_keyboard }});
+}
+
+async function handlePremiumHubRequest(chatId, userId) {
+    const userDb = (await kv.get(["users", userId])).value || {};
+    if (!userDb.is_permanent_premium) {
+        await sendTelegramMessage(chatId, `
+🚫 <b>Access Denied</b> 🚫
+
+This **Premium Hub** is exclusively for our lifetime premium members who have supported the bot through a donation.
+
+To unlock this section and all future premium services, please consider becoming a lifetime member.
+
+Use the /premium_member command to learn more.
+        `);
+        return;
+    }
+
+    const premiumHubMessage = `
+💎 **Welcome to the Premium Hub!** 💎
+
+This is your central place for all exclusive premium content. As a lifetime member, you have access to everything listed below. We'll be adding more services soon!
+
+Select an option to get your access details:
+    `;
+    const inline_keyboard = [
+        [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }],
+        // Add more buttons here for future services
+        // [{ text: "📺 Netflix", callback_data: "premium_service|netflix" }],
+    ];
+    await sendTelegramMessage(chatId, premiumHubMessage.trim(), { reply_markup: { inline_keyboard } });
 }
 
 
@@ -369,6 +397,41 @@ async function handleCallbackQuery(callbackQuery) {
     
     const privateChatId = message.chat.id;
 
+    if (action === "premium_hub") {
+        await deleteMessage(privateChatId, message.message_id);
+        await handlePremiumHubRequest(privateChatId, userId);
+        return;
+    }
+    
+    if (action === "premium_service") {
+        const service = payload;
+        if (service === "chatgpt_pro") {
+            const chatGptMessage = `
+🧠 **Your ChatGPT Plus Access**
+
+Your subscription is active and ready to use.
+
+**How to Use:**
+1. Click the link below to verify your access.
+2. Bookmark the link! This is your key for the next 365 days.
+3. If you face any issues, just reopen the same link. The system will refresh your access or assign a new account automatically.
+
+**Important:** Use a **USA VPN** when logging in.
+            `;
+            await editMessageText(chatGptMessage, { 
+                chat_id: privateChatId, 
+                message_id: message.message_id,
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
+                        [{ text: "🔙 Back to Premium Hub", callback_data: "premium_hub" }]
+                    ]
+                }
+            });
+        }
+        return;
+    }
+
     if (action === 'select_video') {
         const videoId = payload;
         const videoUrl = `https://youtu.be/${videoId}`;
@@ -415,14 +478,8 @@ async function handleCallbackQuery(callbackQuery) {
 // --- Premium System Helpers ---
 async function checkPremium(userId) {
     const userKey = ["users", userId];
-    const premiumAccessKey = ["premium_access", userId];
     const user = (await kv.get(userKey)).value || {};
-    const premiumInfo = (await kv.get(premiumAccessKey)).value || { expires_at: 0 };
-
-    const isPermanentPremium = user.is_permanent_premium || userId === ADMIN_ID;
-    const hasActiveTempPremium = premiumInfo.expires_at > Date.now();
-    
-    return isPermanentPremium || hasActiveTempPremium;
+    return user.is_permanent_premium || userId === ADMIN_ID;
 }
 
 async function spendCredit(chatId, userId) {
@@ -623,7 +680,7 @@ Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
 ⭐ <b>How to Get Premium Access:</b>
 There are two ways to get premium features:
 - <b>Temporary Access:</b> Use /refer to invite friends. For every ${REFERRAL_GOAL} referrals, you get a credit for ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
-- <b>Lifetime Access:</b> Use /premium_member or /donate to make a one-time donation for permanent premium access.
+- <b>Lifetime Access:</b> Use /premium_member or /donate to make a one-time donation for permanent premium access. This also includes access to the /premium_hub for exclusive content.
 
 ⚙️ <b>Other Commands</b>
 /settings - Manage your preferences
@@ -638,7 +695,7 @@ There are two ways to get premium features:
 async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
     const settingsMessage = "⚙️ <b>User Settings</b>";
     const inline_keyboard = [
-        [{ text: "💎 Get Premium", callback_data: "get_premium" }],
+        [{ text: "💎 Get Premium", callback_data: "get_premium" }, { text: "👑 Premium Hub", callback_data: "premium_hub" }],
         [{ text: "⚙️ Default Quality", callback_data: "settings_quality" }],
         [{ text: "📊 My Stats", callback_data: "user_stats" }],
         [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
@@ -754,5 +811,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v64 - Premium Command)...");
+console.log("Starting Adiza All-In-One Downloader (v65 - Premium Hub)...");
 Deno.serve(handler);
