@@ -1,18 +1,10 @@
-// --- Bot Configuration (Your Details) ---
+// --- Bot Configuration ---
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://t.me/QueenAdiza";
 const MAX_FILE_SIZE_MB = 49;
-
-// --- Formats with Icons ---
-const SUPPORTED_FORMATS = [
-    { format: "mp3", icon: "🎵" }, { format: "144", icon: "🎬" },
-    { format: "240", icon: "🎬" }, { format: "360", icon: "🎬" },
-    { format: "480", icon: "🎬" }, { format: "720", icon: "🔥" },
-    { format: "1080", icon: "🔥" }
-];
 
 // --- Main Request Handler ---
 async function handler(req) {
@@ -41,21 +33,9 @@ async function handleMessage(message) {
   if (text === "/start") {
     const user = message.from;
     const welcomeMessage = `
-👋 <b>Hello, ${user.first_name}! Welcome to Adiza YouTube Downloader Bot!</b> 🌹
+👋 <b>Hello, ${user.first_name}! Welcome to Adiza YouTube Downloader!</b> 🌹
 
-🔑 <b>Your Telegram ID:</b> <code>${user.id}</code>
-
-<b>How to use me:</b>
-1️⃣ Paste any YouTube video link here.
-2️⃣ Choose your preferred format from the buttons that appear.
-
-<b>Features:</b>
-✅ Direct downloads for files under 50MB
-✅ All formats supported with icons
-
-💡 <i>TIP: This bot is fast, free, and easy to use.</i>
-
-❄️ <b>Stay connected:</b>
+Paste a YouTube link to get started.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -64,14 +44,31 @@ async function handleMessage(message) {
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-    await sendTelegramMessage(chatId, "Fetching download options...");
-    const keyboard = createFormatButtons(text);
-    await sendTelegramMessage(chatId, "Please choose a format to download:", {
-      reply_markup: { inline_keyboard: keyboard }
-    });
+    await sendTelegramMessage(chatId, "<i>Fetching video details, please wait...</i>");
+    try {
+        const infoUrl = `${YOUR_API_BASE_URL}/info?url=${encodeURIComponent(text)}`;
+        const infoRes = await fetch(infoUrl);
+        if (!infoRes.ok) throw new Error("API did not return video info.");
+        const info = await infoRes.json();
+
+        let caption = `<b>${info.title || 'Unknown Title'}</b>\n`;
+        caption += `<i>by ${info.author || 'Unknown Artist'}</i>\n\n`;
+        caption += `📦 <b>Available Formats:</b>\n<pre>`;
+        info.formats.forEach(f => {
+            caption += `\n${f.quality.padEnd(5)} - ${f.size.padStart(6)}`;
+        });
+        caption += `</pre>`;
+        
+        const keyboard = createFormatButtons(text, info.formats);
+        await sendPhoto(chatId, info.thumbnail_url, caption, { reply_markup: { inline_keyboard: keyboard } });
+
+    } catch (e) {
+        console.error("Failed to fetch video info:", e);
+        await sendTelegramMessage(chatId, "❌ Could not fetch video details. Please check the link or try again.");
+    }
   
   } else {
-    await sendTelegramMessage(chatId, "Please send a valid YouTube link to get started, or use the /start command.");
+    await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
   }
 }
 
@@ -79,46 +76,42 @@ async function handleCallbackQuery(callbackQuery) {
   const { data, message } = callbackQuery;
   const chatId = message.chat.id;
   const [format, videoUrl] = data.split("|");
-  const downloadUrl = `${YOUR_API_BASE_URL}?url=${encodeURIComponent(videoUrl)}&format=${format}`;
   
   await answerCallbackQuery(callbackQuery.id, `Processing ${format.toUpperCase()}...`);
-  const statusMsg = await sendTelegramMessage(chatId, `Checking file size for ${format.toUpperCase()}...`);
+  const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size...</i>`);
 
   try {
+    const downloadUrl = `${YOUR_API_BASE_URL}/download?url=${encodeURIComponent(videoUrl)}&format=${format}`;
     const headRes = await fetch(downloadUrl, { method: 'HEAD' });
     const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
     const fileSizeMB = contentLength / (1024 * 1024);
 
     if (fileSizeMB > 0 && fileSizeMB < MAX_FILE_SIZE_MB) {
-      await editMessageText(chatId, statusMsg.result.message_id, `✅ File is ${fileSizeMB.toFixed(2)}MB. Downloading...`);
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ File is ${fileSizeMB.toFixed(2)}MB. Downloading...</i>`);
       const fileRes = await fetch(downloadUrl);
       const fileBlob = await fileRes.blob();
       
-      await editMessageText(chatId, statusMsg.result.message_id, `Uploading to Telegram...`);
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>Uploading to Telegram...</i>`);
       
       const fileType = format === 'mp3' ? 'audio' : 'video';
-      const fileName = `${fileType}_${Date.now()}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
-      await sendMedia(chatId, fileBlob, fileType, `Downloaded via Adiza Bot\n_Developed by Matrix - King_`, fileName);
+      const fileName = `video_${Date.now()}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+      await sendMedia(chatId, fileBlob, fileType, `Downloaded via @${message.chat.username || 'AdizaBot'}`, fileName);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      const replyText = `⚠️ File is ${fileSizeMB > 0 ? fileSizeMB.toFixed(2) : 'too large or unavailable'}.\n\n<b>Here is your direct download link:</b>\n\n<a href="${downloadUrl}">Click here to download ${format.toUpperCase()}</a>\n\n_Developed by Matrix - King_`;
+      const replyText = `⚠️ File is ${fileSizeMB > 0 ? fileSizeMB.toFixed(2) : 'too large or unavailable'}.\n\n<b>Here is your direct download link:</b>\n\n<a href="${downloadUrl}">Click here to download ${format.toUpperCase()}</a>`;
       await editMessageText(chatId, statusMsg.result.message_id, replyText);
     }
   } catch (error) {
     console.error("Download handling error:", error);
-    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred. The link may have expired or your API is down.");
+    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
   }
 }
 
 // --- Telegram API Helpers ---
 async function apiRequest(method, params = {}) {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  });
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
   return res.json();
 }
 
@@ -147,15 +140,21 @@ async function sendMedia(chatId, blob, type, caption, fileName) {
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
-    formData.append('parse_mode', 'Markdown');
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
     await fetch(url, { method: 'POST', body: formData });
 }
 
-function createFormatButtons(videoUrl) {
-  let rows = [], currentRow = [];
-  SUPPORTED_FORMATS.forEach(item => {
-    currentRow.push({ text: `${item.icon} ${item.format.toUpperCase()}`, callback_data: `${item.format}|${videoUrl}` });
+function createFormatButtons(videoUrl, formats) {
+  const rows = [];
+  let currentRow = [];
+  const formatMap = {
+      'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼',
+      '480p': '📺', '720p': '🔥', '1080p': '🔥'
+  };
+  formats.forEach(f => {
+    const quality = f.quality.toLowerCase();
+    const icon = formatMap[quality] || '💾';
+    currentRow.push({ text: `${icon} ${quality.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
     if (currentRow.length === 3) {
       rows.push(currentRow);
       currentRow = [];
@@ -166,5 +165,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final, stable bot server with user details...");
+console.log("Starting ultimate advanced bot server...");
 Deno.serve(handler);
