@@ -304,5 +304,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v16 - Deno Config File)...");
+console.log("Starting final professional bot server (v17 - UI Database)...");
 Deno.serve(handler);
