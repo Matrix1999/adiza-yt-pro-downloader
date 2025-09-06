@@ -86,8 +86,23 @@ async function handleCallbackQuery(callbackQuery) {
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      const replyText = `⚠️ File is ${fileSizeMB > 0 ? fileSizeMB.toFixed(2) : 'too large or unavailable'}.\n\n<b>Here is your direct download link:</b>\n\n<a href="${downloadUrl}">Click here to download ${format.toUpperCase()}</a>`;
-      await editMessageText(chatId, statusMsg.result.message_id, replyText);
+      // THIS IS THE NEW, ADVANCED MESSAGE FOR LARGE FILES
+      const messageText = `
+⚠️ <b>File Too Large for Telegram!</b> ⚠️
+
+The selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
+
+Please use the direct download link below.
+      `;
+      const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
+      const inline_keyboard = [[{
+          text: `🔗 Download ${formatDisplay} 🔮`,
+          url: downloadUrl
+      }]];
+
+      await editMessageText(chatId, statusMsg.result.message_id, messageText.trim(), {
+          reply_markup: { inline_keyboard }
+      });
     }
   } catch (error) {
     console.error("Download handling error:", error);
@@ -149,14 +164,12 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     await fetch(url, { method: 'POST', body: formData });
 }
 
-// THIS FUNCTION IS NOW FIXED
 function createFormatButtons(videoUrl) {
     const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
-    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '🔥' };
+    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '💎' };
     let rows = [], currentRow = [];
     
     formats.forEach(f => {
-        // FIX: Check if the format is MP3 and handle it separately
         const quality = f.toLowerCase() === 'mp3' ? 'mp3' : f.toLowerCase().replace('p', '');
         const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
@@ -170,5 +183,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final stable bot server (v2)...");
+console.log("Starting final stable bot server (v3)...");
 Deno.serve(handler);
