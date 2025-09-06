@@ -178,8 +178,9 @@ async function handleStart(message, referrerId) {
 <b>User ID:</b> <code>${user.id}</code>
 <b>Status:</b> ${userStatus}
 
-Welcome to Adiza YouTube & TikTok Downloader! 🌹
-Send a YouTube or TikTok link, or use /help to see all commands.
+ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴅɪᴢᴀ ʏᴏᴜᴛᴜʙᴇ & ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ!🌹
+
+sᴇɴᴅ ᴀ ʏᴏᴜᴛᴜʙᴇ ᴏʀ ᴛɪᴋᴛᴏᴋ ʟɪɴᴋ, ᴏʀ ᴜsᴇ /settings ᴛᴏ sᴇᴇ ᴀʟʟ ᴄᴏᴍᴍᴀɴᴅs.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
