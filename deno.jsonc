@@ -1,5 +1,0 @@
-{
-  "tasks": {
-    "start": "deno run --allow-all --unstable-kv main.js"
-  }
-}
