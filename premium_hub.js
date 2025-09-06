@@ -1,10 +1,13 @@
-// --- Import Shared Functions & Constants ---
-// Note: We need to import the functions and constants used by this module.
-// It's best practice to create a 'helpers.js' and 'config.js' for this.
-// For now, we will import them from where they would be in 'main.js' or a new 'helpers.js'
-import { sendTelegramMessage, editMessageText, answerCallbackQuery, deleteMessage } from './helpers.js';
-import { OWNER_URL } from './config.js';
-import { checkPremium } from './main.js'; // Assuming checkPremium stays in main for now
+// --- Import Shared Functions & Constants from main.js ---
+// CORRECTED: All imports now point directly to your main.js file
+import { 
+    sendTelegramMessage, 
+    editMessageText, 
+    answerCallbackQuery, 
+    deleteMessage,
+    checkPremium,
+    OWNER_URL
+} from './main.js';
 
 // --- Premium Hub Handlers ---
 
