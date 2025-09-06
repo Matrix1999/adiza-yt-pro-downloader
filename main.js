@@ -92,7 +92,6 @@ Simply send a song or video name to get started.
             await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
         }
     } else {
-        // --- NEW: Handle as a direct search query ---
         await sendTelegramMessage(chatId, `🔍 Searching for: <b>${text}</b>...`);
         const searchResults = await searchYoutube(text);
 
@@ -101,7 +100,7 @@ Simply send a song or video name to get started.
             return;
         }
 
-        const resultButtons = searchResults.slice(0, 5).map(video => ([{
+        const resultButtons = searchResults.slice(0, 15).map(video => ([{
             text: `🎬 ${video.title}`,
             callback_data: `select_video|${video.id}`
         }]));
@@ -119,18 +118,27 @@ async function handleCallbackQuery(callbackQuery) {
     const payload = payloadParts.join("|");
 
     if (inline_message_id) {
-        // ... (inline mode logic remains the same)
+        if (action === "download") {
+            await answerCallbackQuery(callbackQuery.id);
+            const [format, videoId] = payload.split(":");
+            const videoUrl = `https://youtu.be/${videoId}`;
+            await editMessageText("✅ Request accepted! Sending file to our private chat.", { inline_message_id, reply_markup: {inline_keyboard: []} });
+            await startDownload(userId, userId, videoUrl, format, true, inline_message_id);
+        } else if (action === "formats") {
+             const videoId = payload;
+             await answerCallbackQuery(callbackQuery.id);
+             const formatButtons = createInlineFormatButtons(videoId);
+             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
+        }
         return;
     }
     
     if(message) {
         const privateChatId = message.chat.id;
 
-        // --- NEW: Handle video selection from search results ---
         if (action === 'select_video') {
             const videoId = payload;
             const videoUrl = `https://youtu.be/${videoId}`;
-            // Clean up the search results message and present format options
             await deleteMessage(privateChatId, message.message_id); 
             await sendTelegramMessage(privateChatId, "✅ Video selected. Now, choose a format:", {
                 reply_markup: { inline_keyboard: createFormatButtons(videoUrl) }
@@ -155,14 +163,13 @@ async function handleCallbackQuery(callbackQuery) {
             return;
         }
         
-        // This now handles the format selection after a direct search or link paste
         const [format, videoUrl] = data.split("|");
         await deleteMessage(privateChatId, message.message_id);
         await startDownload(privateChatId, userId, videoUrl, format);
     }
 }
 
-// --- Main Download Logic (with chosen message) ---
+// --- Main Download Logic ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
@@ -282,7 +289,6 @@ async function handleSettingsCallbacks(action, payload, chatId, messageId, userI
         await editMessageText(`📊 <b>Your Stats</b>\n\nTotal Downloads: ${downloads}`, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "back_to_settings" }]] } });
     } else if (action === "back_to_settings") { await sendSettingsMessage(chatId, messageId, true); }
     else if (action === "help_menu") { 
-        // --- NEW: Updated Help & FAQ Text ---
         const helpMessage = `📖 <b>Help & FAQ</b>
 
 <b>Three Ways to Use This Bot:</b>
@@ -388,5 +394,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v50 - Direct Search Feature)...");
+console.log("Starting Adiza Downloader Bot (v51 - 15 Search Results)...");
 Deno.serve(handler);
