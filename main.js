@@ -9,7 +9,7 @@ const MAX_FILE_SIZE_MB = 49;
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999;
 
-// --- Direct MP3 API Config (Based on your new inspection) ---
+// --- NEW: Direct MP3 API Config (From your inspection) ---
 const DIRECT_API = {
     base: "https://media.savetube.me/api",
     cdn: "/random-cdn",
@@ -33,6 +33,8 @@ const kv = await Deno.openKv();
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
+    "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ", "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
+    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE"
 ];
 
 // --- State Management ---
@@ -41,11 +43,16 @@ const activeDownloads = new Map();
 // --- Main Request Handler ---
 async function handler(req) {
     if (req.method !== "POST") return new Response("Not Allowed", { status: 405 });
+    if (!BOT_TOKEN) return new Response("Internal Error: BOT_TOKEN not set", { status: 500 });
     try {
         const update = await req.json();
-        if (update.inline_query) await handleInlineQuery(update.inline_query);
-        else if (update.callback_query) await handleCallbackQuery(update.callback_query);
-        else if (update.message) await handleMessage(update.message);
+        if (update.inline_query) {
+            await handleInlineQuery(update.inline_query);
+        } else if (update.callback_query) {
+            await handleCallbackQuery(update.callback_query);
+        } else if (update.message) {
+            await handleMessage(update.message);
+        }
         return new Response("ok");
     } catch (e) {
         console.error("Main handler error:", e);
@@ -53,32 +60,53 @@ async function handler(req) {
     }
 }
 
-// --- Logic Handlers (handleMessage, handleCallbackQuery, etc.) ---
+// --- Helper: Delay Function ---
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// --- Logic Handlers ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
     const user = message.from;
     const userId = user.id;
 
+    if (text === "/broadcast" && userId === ADMIN_ID) {
+        await handleBroadcast(message);
+        return;
+    }
+
     if (text === "/start") {
         await kv.set(["users", userId], user);
-        const stickerCount = (await kv.get(["global", "stickerCounter"])).value || 0;
-        await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
-        await kv.set(["global", "stickerCounter"], stickerCount + 1);
-        await delay(1000);
+        if (WELCOME_STICKER_IDS.length > 0) {
+            const stickerCount = (await kv.get(["global", "stickerCounter"])).value || 0;
+            await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
+            await kv.set(["global", "stickerCounter"], stickerCount + 1);
+        }
+        await delay(4000);
+        const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
+        const welcomeMessage = `
+👋 Hello, <b>${user.first_name}</b>!
 
-        const welcomeMessage = `👋 Hello, <b>${user.first_name}</b>!\n\nWelcome to Adiza YouTube Downloader! 🌹\nPaste a YouTube link or search inline to get started.`;
+<b>User ID:</b> <code>${user.id}</code>
+<b>Status:</b> ${userStatus}
+
+Welcome to Adiza YouTube Downloader! 🌹
+Paste a YouTube link or use the buttons below to get started.
+        `;
         const inline_keyboard = [
-            [{ text: "🔮 Channel", url: CHANNEL_URL }, { text: "👑 Owner", url: OWNER_URL }],
-            [{ text: "💖 Donate", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
+            [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
+            [{ text: "👑 OWNER 👑", url: OWNER_URL }],
+            [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
-        await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage, { reply_markup: { inline_keyboard } });
+        await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
         if (userQuality) {
             await startDownload(chatId, userId, text, userQuality);
         } else {
-            await sendTelegramMessage(chatId, "Please choose a format:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
+            await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
         }
     } else {
         await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
@@ -96,19 +124,27 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             const [format, videoId] = payload.split(":");
             const videoUrl = `https://youtu.be/${videoId}`;
-            await editMessageText("✅ Request accepted! Sending the file to our private chat.", { inline_message_id });
-            await startDownload(userId, userId, videoUrl, format, true, inline_message_id);
+            await editMessageText("✅ Request accepted! Sending file to our private chat.", { inline_message_id, reply_markup: {inline_keyboard: []} });
+            // --- FIX: Pass inline parameters to startDownload ---
+            await startDownload(userId, userId, videoUrl, format, true, inline_message_id); 
         } else if (action === "formats") {
              const videoId = payload;
              await answerCallbackQuery(callbackQuery.id);
-             await editMessageText("Choose a format:", { inline_message_id, reply_markup: { inline_keyboard: createInlineFormatButtons(videoId) } });
+             const formatButtons = createInlineFormatButtons(videoId);
+             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
         }
         return;
     }
     
-    if (message) {
+    if(message) {
         const privateChatId = message.chat.id;
-        if (action.startsWith("settings") || action.startsWith("back_to_")) {
+        if (action === "cancel") {
+            const controller = activeDownloads.get(payload);
+            if (controller) controller.abort();
+            await editMessageText("❌ Download Canceled.", { chat_id: privateChatId, message_id: message.message_id });
+            return;
+        }
+        if (action.startsWith("settings") || action.startsWith("back_to_") || action.startsWith("user_") || action.startsWith("set_default") || action.startsWith("help_")) {
              await handleSettingsCallbacks(action, payload, privateChatId, message.message_id, userId);
              await answerCallbackQuery(callbackQuery.id);
              return;
@@ -125,31 +161,19 @@ async function handleCallbackQuery(callbackQuery) {
     }
 }
 
-async function handleInlineQuery(inlineQuery) {
-    const query = inlineQuery.query.trim();
-    if (!query) return;
-
-    const searchResults = await searchYoutube(query);
-    const results = searchResults.map(video => ({
-        type: 'article',
-        id: video.id,
-        title: video.title,
-        description: `Duration: ${video.length.simpleText}`,
-        thumb_url: video.thumbnail.url,
-        input_message_content: { message_text: `🎨 Selected: ${video.title}` },
-        reply_markup: { inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]] }
-    }));
-    await apiRequest('answerInlineQuery', { inline_query_id: inlineQuery.id, results: JSON.stringify(results), cache_time: 300 });
-}
-
 // --- Main Download Logic with Hybrid Approach ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
     const controller = new AbortController();
     activeDownloads.set(downloadKey, controller);
+    const cancelBtn = { text: "❌ Cancel", callback_data: `cancel|${downloadKey}` };
 
     try {
+        const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
+
+        if (!isInline) await editMessageText(`🔎 Analyzing link...`, {...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        
         const info = await getVideoInfo(videoUrl);
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         
@@ -157,51 +181,55 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         
         // --- HYBRID LOGIC ---
         if (format === 'mp3') {
-            // Use the direct savetube API for MP3
-            if (!isInline) await editMessageText("🎧 Fetching MP3 via direct API...", { chat_id: chatId, message_id: statusMsg.result.message_id });
+            if (!isInline) await editMessageText("🎧 Fetching MP3 via direct API...", editTarget);
             fileBlob = await getDirectMp3(videoUrl, controller.signal);
         } else {
-            // Use your worker for all videos (MP4)
-            if (!isInline) await editMessageText(`📹 Fetching ${format}p via your worker...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
+            // Use your Cloudflare Worker for all video formats
+            if (!isInline) await editMessageText(`📹 Fetching ${format}p via worker...`, editTarget);
             const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
             const fileRes = await fetch(downloadUrl, { signal: controller.signal });
             if (!fileRes.ok) throw new Error(`Video worker failed with status: ${fileRes.status}`);
             fileBlob = await fileRes.blob();
         }
 
-        if (isInline) {
-            await sendMedia(chatId, fileBlob, format === 'mp3' ? 'audio' : 'video', `📥 @${BOT_USERNAME}`, safeTitle, info.title);
-        } else {
-            await editMessageText(`✅ Uploading to you...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
-            await sendMedia(chatId, fileBlob, format === 'mp3' ? 'audio' : 'video', `📥 @${BOT_USERNAME}`, safeTitle, info.title);
-            await deleteMessage(chatId, statusMsg.result.message_id);
+        const fileSizeMB = fileBlob.size / (1024 * 1024);
+        if (fileSizeMB > MAX_FILE_SIZE_MB) {
+            const largeFileMsg = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
+            if(isInline) await sendTelegramMessage(chatId, largeFileMsg);
+            else await editMessageText(largeFileMsg, editTarget);
+            return;
         }
 
+        if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
+
+        const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
+        const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
+        
+        await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
+        if (!isInline) await deleteMessage(chatId, statusMsg.result.message_id);
+        
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
     } catch (error) {
-        console.error("Download handling error:", error);
-        const errorMsg = `❌ Download failed: ${error.message}`;
-        if (isInline) {
-            await sendTelegramMessage(chatId, errorMsg);
-        } else if (statusMsg) {
-            await editMessageText(errorMsg, { chat_id: chatId, message_id: statusMsg.result.message_id });
+        if (error.name !== 'AbortError') {
+            console.error("Download handling error:", error);
+            const errorMsg = `❌ Sorry, an error occurred: ${error.message}`;
+            if (isInline) await sendTelegramMessage(chatId, errorMsg);
+            else await editMessageText(errorMsg, { chat_id: chatId, message_id: statusMsg.result.message_id });
         }
     } finally {
         activeDownloads.delete(downloadKey);
     }
 }
 
-// --- NEW: Direct MP3 Fetcher (Based on your screenshots) ---
+// --- NEW: Direct MP3 Fetcher & Helpers (From your inspection) ---
 async function getDirectMp3(youtubeUrl, signal) {
     try {
-        // Step 1: Get the CDN server hostname
         const cdnResponse = await fetch(`${DIRECT_API.base}${DIRECT_API.cdn}`, { headers: DIRECT_API.headers, signal });
         if (!cdnResponse.ok) throw new Error(`CDN request failed: ${cdnResponse.status}`);
         const { cdn } = await cdnResponse.json();
-        const cdnHost = `https://${cdn}`; // This will be like "https://cdn402.savetube.su"
+        const cdnHost = `https://${cdn}`;
 
-        // Step 2: Get video info and encryption key
         const youtubeId = getYoutubeId(youtubeUrl);
         if (!youtubeId) throw new Error("Invalid YouTube URL");
         
@@ -215,7 +243,6 @@ async function getDirectMp3(youtubeUrl, signal) {
         const infoData = await infoResponse.json();
         const decryptedInfo = await decryptApiData(infoData.data);
 
-        // Step 3: Get download URL
         const downloadApiResponse = await fetch(`${cdnHost}${DIRECT_API.download}`, {
             method: 'POST',
             headers: DIRECT_API.headers,
@@ -225,21 +252,16 @@ async function getDirectMp3(youtubeUrl, signal) {
         if (!downloadApiResponse.ok) throw new Error(`Download API call failed: ${downloadApiResponse.status}`);
         const downloadData = await downloadApiResponse.json();
 
-        // Step 4: Fetch the actual MP3 file
-        const fileResponse = await fetch(downloadData.data.downloadUrl, { 
-            headers: { 'Referer': 'https://yt.savetube.me/' }, 
-            signal 
-        });
+        const fileResponse = await fetch(downloadData.data.downloadUrl, { headers: { 'Referer': 'https://yt.savetube.me/' }, signal });
         if (!fileResponse.ok) throw new Error(`Final file fetch failed: ${fileResponse.status}`);
         
         return fileResponse.blob();
     } catch (error) {
         console.error("Direct MP3 fetch error:", error);
-        throw error; // Re-throw the error to be caught by startDownload
+        throw error;
     }
 }
 
-// --- Helper Functions (getYoutubeId, decrypt, etc.) ---
 function getYoutubeId(url) {
     if (!url) return null;
     const patterns = [
@@ -267,16 +289,41 @@ function hexToUint8Array(hex) {
     return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 }
 
-async function getVideoInfo(youtubeUrl) {
-    try {
-        const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`);
-        if (!response.ok) return { title: "video" };
-        const data = await response.json();
-        return { title: data.title };
-    } catch (e) {
-        console.error("oEmbed fetch failed:", e);
-        return { title: "video" };
+// --- Other Handlers (Broadcast, Inline Query, etc.) ---
+async function handleInlineQuery(inlineQuery) {
+    const query = inlineQuery.query.trim();
+    if (!query) return;
+
+    const searchResults = await searchYoutube(query);
+    const results = searchResults.map(video => ({
+        type: 'article',
+        id: video.id,
+        title: video.title,
+        description: `Duration: ${video.length.simpleText}`,
+        thumb_url: video.thumbnail.url,
+        input_message_content: { message_text: `🎨𝗬𝗼𝘂 𝘀𝗲𝗹𝗲𝗰𝘁𝗲𝗱: ${video.title}\n\nPress the button below to choose a download format.` },
+        reply_markup: { inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]] }
+    }));
+    await apiRequest('answerInlineQuery', { inline_query_id: inlineQuery.id, results: JSON.stringify(results), cache_time: 300 });
+}
+
+async function handleBroadcast(message) {
+    if (!message.reply_to_message) {
+        await sendTelegramMessage(message.chat.id, "⚠️ **Broadcast Error**\nPlease reply to the message you want to broadcast.");
+        return;
     }
+    const users = [];
+    for await (const entry of kv.list({ prefix: ["users"] })) users.push(entry.key[1]);
+    await sendTelegramMessage(message.chat.id, `🚀 **Starting Broadcast...**\nSending to ${users.length} users.`);
+    let successCount = 0;
+    for (const userId of users) {
+        try {
+            await apiRequest('copyMessage', { chat_id: userId, from_chat_id: message.chat.id, message_id: message.reply_to_message.message_id });
+            successCount++;
+        } catch (e) { console.error(`Failed to broadcast to user ${userId}:`, e.message); }
+        await delay(100); 
+    }
+    await sendTelegramMessage(message.chat.id, `✅ **Broadcast Complete!**\nSent to ${successCount} of ${users.length} users.`);
 }
 
 async function searchYoutube(query) {
@@ -289,76 +336,134 @@ async function searchYoutube(query) {
     }
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+// --- Helper Functions ---
+async function handleSettingsCallbacks(action, payload, chatId, messageId, userId) {
+    if (action === "settings_menu") {
+        await deleteMessage(chatId, messageId); 
+        await sendSettingsMessage(chatId);
+    } else if (action === "settings_quality") {
+        const userQuality = (await kv.get(["users", userId, "quality"])).value;
+        await editMessageText("Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(userQuality) } });
+    } else if (action === "set_default") {
+        payload === "remove" ? await kv.delete(["users", userId, "quality"]) : await kv.set(["users", userId, "quality"], payload);
+        const newUserQuality = (await kv.get(["users", userId, "quality"])).value;
+        await editMessageText("Default quality updated. Please choose your preferred default download quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: createQualitySettingsButtons(newUserQuality) } });
+    } else if (action === "user_stats") {
+        const downloads = (await kv.get(["users", userId, "downloads"])).value || 0;
+        await editMessageText(`📊 **Your Stats**\n\nTotal Downloads: *${downloads}*`, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+    } else if (action === "back_to_settings") {
+        await sendSettingsMessage(chatId, messageId, true);
+    } else if (action === "help_menu") {
+        const helpMessage = `📖 <b>Help & FAQ</b>...`; // Your help text
+        await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
+    }
+}
+
+async function sendDonationMessage(chatId) {
+    await sendTelegramMessage(chatId, `💖 **Support Adiza Bot!**...`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]] } });
+}
+
+async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
+    const settingsMessage = "⚙️ **User Settings**...";
+    const inline_keyboard = [
+        [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
+        [{ text: "📊 My Stats", callback_data: "user_stats" }],
+        [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
+    ];
+    if (shouldEdit && messageIdToUpdate) {
+        await editMessageText(settingsMessage, { chat_id: chatId, message_id: messageIdToUpdate, parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    } else {
+        await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+    }
+}
+
+function createQualitySettingsButtons(currentQuality) {
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatIcons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
+    let buttons = formats.map(f => ({ text: `${currentQuality === f ? "✅ " : ""}${formatIcons[f]} ${f.toUpperCase()}`, callback_data: `set_default|${f}` }));
+    let rows = [];
+    while (buttons.length > 0) rows.push(buttons.splice(0, 3));
+    rows.push([{ text: "❌ Remove Default", callback_data: "set_default|remove" }, { text: "🔙 Back to Settings", callback_data: "back_to_settings" }]);
+    return rows;
+}
+
+function createInlineFormatButtons(videoId) {
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatIcons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
+    let buttons = formats.map(f => ({ text: `${formatIcons[f]} ${f.toUpperCase()}`, callback_data: `download|${f}:${videoId}` }));
+    let rows = [];
+    while (buttons.length > 0) rows.push(buttons.splice(0, 3));
+    return rows;
+}
+
+function createFormatButtons(videoUrl) {
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatIcons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
+    let rows = [], currentRow = [];
+    formats.forEach(f => {
+        currentRow.push({ text: `${formatIcons[f]} ${f.toUpperCase()}`, callback_data: `${f}|${videoUrl}` });
+        if (currentRow.length === 3) {
+            rows.push(currentRow);
+            currentRow = [];
+        }
+    });
+    if (currentRow.length > 0) rows.push(currentRow);
+    return rows;
+}
+
+async function getVideoInfo(youtubeUrl) {
+    try {
+        const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`);
+        if (!response.ok) return { title: null };
+        const data = await response.json();
+        return { title: data.title };
+    } catch (e) {
+        console.error("oEmbed fetch failed:", e);
+        return { title: null };
+    }
 }
 
 // --- Telegram API Helpers ---
-async function sendMedia(chatId, blob, type, caption, safeFileName, title) {
+async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append('caption', caption);
-
-    let endpoint, file;
     
+    let endpoint = '';
     if (type === 'audio') {
-        endpoint = 'sendAudio';
-        file = new File([blob], `${safeFileName}.mp3`, { type: "audio/mpeg" });
-        formData.append('audio', file);
+        const audioFile = new File([blob], fileName, { type: "audio/mpeg" });
+        formData.append('audio', audioFile);
         formData.append('title', title || 'Unknown Title');
         formData.append('performer', `Via @${BOT_USERNAME}`);
+        endpoint = 'sendAudio';
     } else {
+        const videoFile = new File([blob], fileName, { type: "video/mp4" });
+        formData.append('video', videoFile);
         endpoint = 'sendVideo';
-        file = new File([blob], `${safeFileName}.mp4`, { type: "video/mp4" });
-        formData.append('video', file);
     }
     
-    const inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots", url: CHANNEL_URL }]];
+    let inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
     if (type === 'audio' && title) {
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: `https://open.spotify.com/search/${encodeURIComponent(title)}` }]);
     }
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
     
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`, { method: 'POST', body: formData });
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`;
+    await fetch(url, { method: 'POST', body: formData });
 }
 
 async function apiRequest(method, params = {}) {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
-    return res.json();
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
+  return res.json();
 }
-
-async function sendTelegramMessage(chatId, text, extra = {}) { return apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra }); }
-async function sendPhoto(chatId, photo, caption, extra = {}) { return apiRequest('sendPhoto', { chat_id: chatId, photo, caption, parse_mode: 'HTML', ...extra }); }
-async function sendSticker(chatId, sticker) { return apiRequest('sendSticker', { chat_id: chatId, sticker }); }
-async function editMessageText(text, extra = {}) { return apiRequest('editMessageText', { text, parse_mode: 'HTML', ...extra }); }
-async function deleteMessage(chatId, messageId) { return apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
-async function answerCallbackQuery(id, text) { return apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
-
-// --- UI and Settings Functions ---
-async function handleSettingsCallbacks(action, payload, chatId, messageId, userId) {
-    if (action === "settings_menu") { await deleteMessage(chatId, messageId); await sendSettingsMessage(chatId); }
-    // Add other settings logic here if needed
-}
-async function sendSettingsMessage(chatId) { /* Add settings UI here */ }
-async function sendDonationMessage(chatId) { /* Add donation UI here */ }
-function createFormatButtons(videoUrl) {
-    const formats = ['mp3', '360', '720', '1080'];
-    let rows = [], currentRow = [];
-    formats.forEach(f => {
-        currentRow.push({ text: `📥 ${f.toUpperCase()}`, callback_data: `${f}|${videoUrl}` });
-        if (currentRow.length === 2) { rows.push(currentRow); currentRow = []; }
-    });
-    if (currentRow.length > 0) rows.push(currentRow);
-    return rows;
-}
-function createInlineFormatButtons(videoId) {
-    const formats = ['mp3', '360', '720', '1080'];
-    const buttons = formats.map(f => ({ text: `📥 ${f.toUpperCase()}`, callback_data: `download|${f}:${videoId}` }));
-    let rows = [];
-    while (buttons.length > 0) rows.push(buttons.splice(0, 2));
-    return rows;
-}
+async function sendTelegramMessage(chatId, text, extra = {}) { return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra }); }
+async function sendPhoto(chatId, photo, caption, extra = {}) { return await apiRequest('sendPhoto', { chat_id: chatId, photo, caption, parse_mode: 'HTML', ...extra }); }
+async function sendSticker(chatId, sticker) { return await apiRequest('sendSticker', { chat_id: chatId, sticker }); }
+async function editMessageText(text, extra = {}) { return await apiRequest('editMessageText', { text, parse_mode: 'HTML', ...extra }); }
+async function deleteMessage(chatId, messageId) { return await apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
+async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Hybrid Downloader Bot Server...");
+console.log("Starting Hybrid Downloader Bot (v2 - MP3 Direct, MP4 Worker)...");
 Deno.serve(handler);
