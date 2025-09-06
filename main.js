@@ -1,6 +1,6 @@
 // --- Bot Configuration ---
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
-const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev/";
+const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://t.me/QueenAdiza";
@@ -48,23 +48,24 @@ Paste a YouTube link to get started.
     try {
         const infoUrl = `${YOUR_API_BASE_URL}/info?url=${encodeURIComponent(text)}`;
         const infoRes = await fetch(infoUrl);
-        if (!infoRes.ok) throw new Error("API did not return video info.");
+        if (!infoRes.ok) throw new Error(`API Error: ${infoRes.statusText}`);
         const info = await infoRes.json();
 
         let caption = `<b>${info.title || 'Unknown Title'}</b>\n`;
-        caption += `<i>by ${info.author || 'Unknown Artist'}</i>\n\n`;
+        if (info.author) caption += `<i>by ${info.author}</i>\n\n`;
+        
         caption += `📦 <b>Available Formats:</b>\n<pre>`;
-        info.formats.forEach(f => {
-            caption += `\n${f.quality.padEnd(5)} - ${f.size.padStart(6)}`;
+        (info.formats || []).forEach(f => {
+            caption += `\n${f.quality.padEnd(6)} - ${f.size.padStart(7)}`;
         });
         caption += `</pre>`;
         
-        const keyboard = createFormatButtons(text, info.formats);
+        const keyboard = createFormatButtons(text, info.formats || []);
         await sendPhoto(chatId, info.thumbnail_url, caption, { reply_markup: { inline_keyboard: keyboard } });
 
     } catch (e) {
         console.error("Failed to fetch video info:", e);
-        await sendTelegramMessage(chatId, "❌ Could not fetch video details. Please check the link or try again.");
+        await sendTelegramMessage(chatId, "❌ Could not fetch video details. Please check the link or that your API is working correctly.");
     }
   
   } else {
@@ -93,8 +94,8 @@ async function handleCallbackQuery(callbackQuery) {
       
       await editMessageText(chatId, statusMsg.result.message_id, `<i>Uploading to Telegram...</i>`);
       
-      const fileType = format === 'mp3' ? 'audio' : 'video';
-      const fileName = `video_${Date.now()}.${format === 'mp3' ? 'mp3' : 'mp4'}`;
+      const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
+      const fileName = `video_${Date.now()}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       await sendMedia(chatId, fileBlob, fileType, `Downloaded via @${message.chat.username || 'AdizaBot'}`, fileName);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
@@ -145,23 +146,19 @@ async function sendMedia(chatId, blob, type, caption, fileName) {
 }
 
 function createFormatButtons(videoUrl, formats) {
-  const rows = [];
-  let currentRow = [];
-  const formatMap = {
-      'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼',
-      '480p': '📺', '720p': '🔥', '1080p': '🔥'
-  };
-  formats.forEach(f => {
-    const quality = f.quality.toLowerCase();
-    const icon = formatMap[quality] || '💾';
-    currentRow.push({ text: `${icon} ${quality.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
-    if (currentRow.length === 3) {
-      rows.push(currentRow);
-      currentRow = [];
-    }
-  });
-  if (currentRow.length > 0) rows.push(currentRow);
-  return rows;
+    let rows = [], currentRow = [];
+    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '🔥' };
+    formats.forEach(f => {
+        const quality = f.quality.toLowerCase();
+        const icon = formatMap[quality] || '💾';
+        currentRow.push({ text: `${icon} ${quality.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
+        if (currentRow.length === 3) {
+            rows.push(currentRow);
+            currentRow = [];
+        }
+    });
+    if (currentRow.length > 0) rows.push(currentRow);
+    return rows;
 }
 
 // --- Server Start ---
