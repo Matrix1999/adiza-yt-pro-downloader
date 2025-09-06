@@ -3,7 +3,7 @@ const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
-const CHANNEL_URL = "https://t.me/QueenAdiza";
+const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const MAX_FILE_SIZE_MB = 49;
 
 // --- Main Request Handler ---
@@ -44,29 +44,11 @@ Paste a YouTube link to get started.
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-    await sendTelegramMessage(chatId, "<i>Fetching video details, please wait...</i>");
-    try {
-        const infoUrl = `${YOUR_API_BASE_URL}/info?url=${encodeURIComponent(text)}`;
-        const infoRes = await fetch(infoUrl);
-        if (!infoRes.ok) throw new Error(`API Error: ${infoRes.statusText}`);
-        const info = await infoRes.json();
-
-        let caption = `<b>${info.title || 'Unknown Title'}</b>\n`;
-        if (info.author) caption += `<i>by ${info.author}</i>\n\n`;
-        
-        caption += `📦 <b>Available Formats:</b>\n<pre>`;
-        (info.formats || []).forEach(f => {
-            caption += `\n${f.quality.padEnd(6)} - ${f.size.padStart(7)}`;
-        });
-        caption += `</pre>`;
-        
-        const keyboard = createFormatButtons(text, info.formats || []);
-        await sendPhoto(chatId, info.thumbnail_url, caption, { reply_markup: { inline_keyboard: keyboard } });
-
-    } catch (e) {
-        console.error("Failed to fetch video info:", e);
-        await sendTelegramMessage(chatId, "❌ Could not fetch video details. Please check the link or that your API is working correctly.");
-    }
+    // SIMPLIFIED: Directly show format buttons without fetching info first.
+    const keyboard = createFormatButtons(text);
+    await sendTelegramMessage(chatId, "Please choose a format to download:", {
+      reply_markup: { inline_keyboard: keyboard }
+    });
   
   } else {
     await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
@@ -82,7 +64,7 @@ async function handleCallbackQuery(callbackQuery) {
   const statusMsg = await sendTelegramMessage(chatId, `<i>Checking file size...</i>`);
 
   try {
-    const downloadUrl = `${YOUR_API_BASE_URL}/download?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+    const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
     const headRes = await fetch(downloadUrl, { method: 'HEAD' });
     const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
     const fileSizeMB = contentLength / (1024 * 1024);
@@ -95,7 +77,7 @@ async function handleCallbackQuery(callbackQuery) {
       await editMessageText(chatId, statusMsg.result.message_id, `<i>Uploading to Telegram...</i>`);
       
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-      const fileName = `video_${Date.now()}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
+      const fileName = `${fileType}_${Date.now()}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       await sendMedia(chatId, fileBlob, fileType, `Downloaded via @${message.chat.username || 'AdizaBot'}`, fileName);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
@@ -145,11 +127,13 @@ async function sendMedia(chatId, blob, type, caption, fileName) {
     await fetch(url, { method: 'POST', body: formData });
 }
 
-function createFormatButtons(videoUrl, formats) {
-    let rows = [], currentRow = [];
+function createFormatButtons(videoUrl) {
+    const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
     const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '🔥' };
+    let rows = [], currentRow = [];
+    
     formats.forEach(f => {
-        const quality = f.quality.toLowerCase();
+        const quality = f.toLowerCase();
         const icon = formatMap[quality] || '💾';
         currentRow.push({ text: `${icon} ${quality.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
@@ -162,5 +146,5 @@ function createFormatButtons(videoUrl, formats) {
 }
 
 // --- Server Start ---
-console.log("Starting ultimate advanced bot server...");
+console.log("Starting simplified, stable bot server...");
 Deno.serve(handler);
