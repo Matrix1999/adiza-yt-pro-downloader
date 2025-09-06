@@ -19,6 +19,7 @@ const ADMIN_ID = 853645999;
 const REFERRAL_GOAL = 2;
 const PREMIUM_ACCESS_DURATION_DAYS = 7;
 const FETCH_TIMEOUT_MS = 90000; // Increased to 90 seconds for API calls
+const MAX_FILE_SIZE_MB = 50; // File size limit for sending directly
 
 // --- External Libraries ---
 import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
@@ -391,7 +392,25 @@ async function spendCredit(chatId, userId) {
     return true;
 }
 
-// --- Rewritten YouTube Download Function ---
+// --- Helper: Get File Size ---
+async function getFileSize(url) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    try {
+        const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (response.ok && response.headers.has("content-length")) {
+            const sizeInBytes = Number(response.headers.get("content-length"));
+            return sizeInBytes / (1024 * 1024);
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name !== 'AbortError') console.error("Could not get file size:", error.message);
+    }
+    return null;
+}
+
+// --- YouTube Download Function with File Size Check ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     let isUserPremium = await checkPremium(userId);
 
@@ -411,27 +430,35 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         const endpoint = isAudio ? 'ytmp3' : 'ytmp4fhd'; 
         const apiRequestUrl = `${YTDLP_API_BASE_URL}/download/${endpoint}?url=${encodeURIComponent(videoUrl)}`;
         
-        console.log(`Calling  API-Endpoint: ${apiRequestUrl}`);
+        console.log(`Calling API-Endpoint: ${apiRequestUrl}`);
         
         const apiResponse = await fetch(apiRequestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-
-        if (!apiResponse.ok) {
-            throw new Error(`Your API server responded with status: ${apiResponse.status}`);
-        }
-
+        if (!apiResponse.ok) throw new Error(`Your API server responded with status: ${apiResponse.status}`);
+        
         const data = await apiResponse.json();
+        if (!data.success || !data.result || !data.result.download_url) throw new Error(data.message || "API did not return a valid download URL.");
+        
+        const finalDownloadUrl = data.result.download_url;
 
-        if (!data.success || !data.result || !data.result.download_url) {
-            throw new Error(data.message || "Your API did not return a valid download URL.");
+        // --- OLD LOGIC RESTORED: File size check for ALL formats ---
+        if (!isInline) await editMessageText(`🔎 Checking file size...`, editTarget);
+        const fileSizeMB = await getFileSize(finalDownloadUrl);
+
+        if (fileSizeMB && fileSizeMB > MAX_FILE_SIZE_MB) {
+            const messageText = `⚠️ <b>File is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\n\nPlease use the link below to download it externally.`;
+            if (isInline) {
+                 await sendTelegramMessage(chatId, `🔗 <b>External Link:</b> ${finalDownloadUrl}`);
+            } else {
+                 await editMessageText(messageText, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: finalDownloadUrl }]] } });
+            }
+            return; // Exit after sending the link
         }
         
+        // If file is small enough, proceed with download
         if (!isInline) await editMessageText(`✅ Download in progress...`, editTarget);
         
-        const finalFileResponse = await fetch(data.result.download_url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-        
-        if (!finalFileResponse.ok) {
-            throw new Error(`Failed to download from the cached link: ${data.result.download_url}`);
-        }
+        const finalFileResponse = await fetch(finalDownloadUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        if (!finalFileResponse.ok) throw new Error(`Failed to download from the cached link: ${finalDownloadUrl}`);
 
         const fileBlob = await finalFileResponse.blob();
         const fileType = isAudio ? 'audio' : 'video';
@@ -446,7 +473,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
     } catch (error) {
-        console.error("New download logic error:", error);
+        console.error("Download logic error:", error);
         const errorMessage = error.name === 'TimeoutError' 
             ? `❌ **Request Timed Out!** Your server took too long.`
             : `❌ **An Error Occurred!**\n\n<i>${error.message}</i>`;
@@ -459,45 +486,34 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
     }
 }
 
-
 // --- TikTok Download Function (Unchanged) ---
 async function startTikTokDownload(chatId, userId, url, format) {
+    // This part remains unchanged as it uses a different API
     let isUserPremium = await checkPremium(userId);
-
     if (format === 'video_hd' && !isUserPremium) {
         if(!(await spendCredit(chatId, userId))) {
              await sendTelegramMessage(chatId, `⭐ <b>HD Video is a Premium Feature!</b>\n\nUse /refer or /donate.`, {});
             return;
         }
     }
-
     const statusMsg = await sendTelegramMessage(chatId, `⏳ Processing TikTok link...`);
-    
     try {
         const apiUrl = `${TIKTOK_API_BASE_URL}?url=${encodeURIComponent(url)}`;
         const apiRes = await fetch(apiUrl);
         if (!apiRes.ok) throw new Error("TikTok API failed.");
-        
         const data = await apiRes.json();
         if (!data.success || !data.download) throw new Error("Could not get TikTok info from API.");
-
         const downloadUrl = data.download[format];
         if (!downloadUrl) throw new Error(`Format "${format}" not available.`);
-        
         await editMessageText(`⏳ Download in progress...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
-        
         const fileRes = await fetch(downloadUrl);
         if (!fileRes.ok) throw new Error("Could not download media file from CDN.");
-        
         const fileBlob = await fileRes.blob();
         await deleteMessage(chatId, statusMsg.result.message_id);
-
         const fileType = format.startsWith('video') ? 'video' : 'audio';
         const fileName = `tiktok_${fileType}.${fileType === 'video' ? 'mp4' : 'mp3'}`;
-        
         await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded via @${BOT_USERNAME}`, fileName, data.tiktok_info.title);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
-
     } catch (error) {
         console.error("TikTok Download Error:", error);
         await editMessageText(`❌ Error downloading TikTok: ${error.message}`, { chat_id: chatId, message_id: statusMsg.result.message_id });
@@ -707,5 +723,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Bot (v80 - Final UI Restore)...");
+console.log("Starting Adiza Bot (v81 - FINAL)...");
 Deno.serve(handler);
