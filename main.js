@@ -700,4 +700,4 @@ export async function answerCallbackQuery(id, text, showAlert = false) { return 
 console.log("Starting Adiza Bot (v77 - Python API Integration)...");
 Deno.serve(handler);
 
-</query>
+
