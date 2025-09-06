@@ -203,8 +203,12 @@ async function startDownload(chatId, userId, videoUrl, format) {
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
         const fileBlob = await fileRes.blob();
         await editMessageText(chatId, statusMsg.result.message_id, `✅ Uploading to you...`);
+        
+        // **BUG FIX**: Use correct file type and extension for audio vs video
         const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-        const fileName = `${safeTitle}.${fileType}`;
+        const fileExtension = format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4';
+        const fileName = `${safeTitle}.${fileExtension}`;
+        
         await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
         await deleteMessage(chatId, statusMsg.result.message_id);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
@@ -299,7 +303,6 @@ async function sendSticker(chatId, stickerFileId) {
 }
 
 async function editMessageText(chatId, messageId, text, extraParams = {}) {
-  // Always use HTML for consistency to avoid tag issues
   return await apiRequest('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', ...extraParams });
 }
 
@@ -339,7 +342,7 @@ function createFormatButtons(videoUrl) {
     let rows = [], currentRow = [];
     formats.forEach(f => {
         const quality = f.toLowerCase().replace('p', '');
-        const icon = formatMap[f.toLowerCase()] || '💾';
+        const icon = formatMap[f] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
@@ -351,5 +354,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v22 - Robust & Polished)...");
+console.log("Starting final professional bot server (v23 - MP3 Fix)...");
 Deno.serve(handler);
