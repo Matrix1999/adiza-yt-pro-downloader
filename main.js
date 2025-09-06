@@ -43,6 +43,11 @@ async function handler(req) {
     }
 }
 
+// --- Helper: Delay Function ---
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // --- Logic Handlers ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
@@ -56,6 +61,8 @@ async function handleMessage(message) {
             await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
             await kv.set(["global", "stickerCounter"], stickerCount + 1);
         }
+        
+        await delay(4000); // 4-second delay
         
         const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
         const welcomeMessage = `
@@ -116,7 +123,8 @@ async function handleCallbackQuery(callbackQuery) {
 
     if (action === "settings_menu") {
         await answerCallbackQuery(callbackQuery.id);
-        await sendSettingsMessage(chatId, message.message_id, true); // Edit the message
+        await deleteMessage(chatId, message.message_id); // Delete the old message
+        await sendSettingsMessage(chatId); // Send a new settings message
         return;
     }
     
@@ -222,20 +230,15 @@ Click the button below to make a secure donation via Paystack.
     await sendTelegramMessage(chatId, donateMessage.trim(), { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
 }
 
-async function sendSettingsMessage(chatId, messageId = null, shouldEdit = false) {
+async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
     const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
     const inline_keyboard = [
         [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
         [{ text: "📊 My Stats", callback_data: "user_stats" }],
         [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
     ];
-    if (shouldEdit && messageId) {
-        // Attempt to edit the message, but if it fails (e.g., it was the photo), send a new one.
-        try {
-            await editMessageText(chatId, messageId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
-        } catch (_) {
-            await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
-        }
+    if (shouldEdit && messageIdToUpdate) {
+        await editMessageText(chatId, messageIdToUpdate, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
     } else {
         await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
     }
@@ -343,5 +346,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v20 - Final Polish)...");
+console.log("Starting final professional bot server (v21 - Final Fixes)...");
 Deno.serve(handler);
