@@ -75,17 +75,11 @@ Paste a YouTube link or use the buttons below to get started.
         const inline_keyboard = [
             [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
             [{ text: "👑 OWNER 👑", url: OWNER_URL }],
-            [{ text: "💖 Donate 💖", callback_data: "donate_now" }]
+            [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
         ];
         await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
     } else if (text === "/settings") {
-        const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
-        const inline_keyboard = [
-            [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
-            [{ text: "📊 My Stats", callback_data: "user_stats" }],
-            [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
-        ];
-        await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
+        await sendSettingsMessage(chatId);
     } else if (text === "/donate") {
         await sendDonationMessage(chatId);
     } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
@@ -117,6 +111,12 @@ async function handleCallbackQuery(callbackQuery) {
         return;
     }
 
+    if (action === "settings_menu") {
+        await sendSettingsMessage(chatId);
+        await answerCallbackQuery(callbackQuery.id);
+        return;
+    }
+    
     if (action === "settings_quality") {
         const qualityKeyboard = [
             [{ text: "🎵 MP3", callback_data: "set_default|mp3" }, { text: "📺 720p", callback_data: "set_default|720" }],
@@ -135,7 +135,8 @@ async function handleCallbackQuery(callbackQuery) {
     if (action === "user_stats") {
         const downloads = await kv.get(["users", userId, "downloads"]);
         const statsMessage = `📊 **Your Stats**\n\n*Total Downloads:* ${downloads.value || 0}`;
-        await editMessageText(chatId, message.message_id, statsMessage, { parse_mode: 'Markdown' });
+        const statsKeyboard = [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]];
+        await editMessageText(chatId, message.message_id, statsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: statsKeyboard } });
         return;
     }
     
@@ -151,7 +152,9 @@ async function handleCallbackQuery(callbackQuery) {
     }
 
     if (action === "help_menu") {
-        await answerCallbackQuery(callbackQuery.id, "Send a YouTube link to get started. Use /settings to change your preferences.");
+        const helpMessage = "❔ **Help & FAQ**\n\nTo use this bot, simply send a valid YouTube link. You will be given options to download the content as either video or audio.\n\nUse the **/settings** command to set your default download quality or to check your usage statistics.";
+        const helpKeyboard = [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]];
+        await editMessageText(chatId, message.message_id, helpMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: helpKeyboard } });
         return;
     }
 
@@ -185,7 +188,6 @@ async function handleCallbackQuery(callbackQuery) {
             await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
             await deleteMessage(chatId, statusMsg.result.message_id);
 
-            // Increment user's download count
             await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
         } else {
@@ -211,14 +213,18 @@ Thank you for considering a donation! Your support helps cover server costs and 
 
 Click the button below to make a secure donation via Paystack.
     `;
-    const inline_keyboard = [[{
-        text: "💳 Donate with Paystack",
-        url: DONATE_URL
-    }]];
-    await sendTelegramMessage(chatId, donateMessage.trim(), {
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard }
-    });
+    const inline_keyboard = [[{ text: "💳 Donate with Paystack", url: DONATE_URL }]];
+    await sendTelegramMessage(chatId, donateMessage.trim(), { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
+}
+
+async function sendSettingsMessage(chatId) {
+    const settingsMessage = "⚙️ **User Settings**\n\nHere you can customize your experience and view your stats. Select an option below.";
+    const inline_keyboard = [
+        [{ text: "⚙️ Set Default Quality", callback_data: "settings_quality" }],
+        [{ text: "📊 My Stats", callback_data: "user_stats" }],
+        [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
+    ];
+    await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown', reply_markup: { inline_keyboard }});
 }
 
 async function getVideoInfo(youtubeUrl) {
@@ -304,5 +310,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v17 - UI Database)...");
+console.log("Starting final professional bot server (v18 - Final UI)...");
 Deno.serve(handler);
