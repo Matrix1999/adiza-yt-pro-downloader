@@ -4,7 +4,7 @@ const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.d
 const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://t.me/QueenAdiza";
-const BOT_USERNAME = "adiza_ytdownloader_bot"; // Your bot's username
+const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
 
 // --- Main Request Handler ---
@@ -97,7 +97,7 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
-// --- NEW HELPER to get video info from a public API ---
+// --- Helper to get video info from YouTube's oEmbed ---
 async function getVideoInfo(youtubeUrl) {
     try {
         const response = await fetch(`https://www.youtube.com/oembed?url=${youtubeUrl}&format=json`);
@@ -109,7 +109,6 @@ async function getVideoInfo(youtubeUrl) {
         return { title: null };
     }
 }
-
 
 // --- Telegram API Helpers ---
 async function apiRequest(method, params = {}) {
@@ -138,16 +137,16 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
-// UPDATED sendMedia function
+// CORRECTED sendMedia function
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
     
-    // Set the title for MP3 files
+    // For audio files, set title and performer correctly
     if (type === 'audio') {
-        formData.append('title', title);
+        formData.append('title', title || 'Unknown');
         formData.append('performer', `Via @${BOT_USERNAME}`);
     }
 
@@ -157,7 +156,7 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
 
 function createFormatButtons(videoUrl) {
     const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
-    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '🔥' };
+    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '🗳', '360p': '🔮', '480p': '📺', '720p': '', '1080p': '💎' };
     let rows = [], currentRow = [];
     
     formats.forEach(f => {
