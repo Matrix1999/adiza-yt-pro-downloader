@@ -1,8 +1,15 @@
 // --- Bot Configuration ---
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
-const TIKTOK_API_BASE_URL = "https://adiza-tiktokpro-downloader.matrixzat99.workers.dev"; // Added TikTok API
-const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
+const TIKTOK_API_BASE_URL = "https://adiza-tiktokpro-downloader.matrixzat99.workers.dev";
+const WELCOME_PHOTO_URLS = [
+    "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg",
+    "https://files.catbox.moe/hbbayg.jpg",
+    "https://files.catbox.moe/jadrbj.jpg",
+    "https://files.catbox.moe/7x9dwj.jpg",
+    "https://files.catbox.moe/u7qhlg.jpg",
+    "https://files.catbox.moe/pcla4l.jpg"
+];
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
@@ -159,6 +166,12 @@ async function handleStart(message, referrerId) {
     
     const userDb = (await kv.get(userKey)).value || {};
     const userStatus = userDb.is_permanent_premium ? "⭐ Premium User" : "👤 Standard User";
+    
+    // Photo Rotation Logic
+    const photoCount = (await kv.get(["global", "photoCounter"])).value || 0;
+    const currentPhotoUrl = WELCOME_PHOTO_URLS[photoCount % WELCOME_PHOTO_URLS.length];
+    await kv.set(["global", "photoCounter"], photoCount + 1);
+
     const welcomeMessage = `
 👋 Hello, <b>${user.first_name}</b>!
 
@@ -173,7 +186,7 @@ Send a YouTube or TikTok link, or use /help to see all commands.
         [{ text: "👑 OWNER 👑", url: OWNER_URL }],
         [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }]
     ];
-    await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
+    await sendPhoto(chatId, currentPhotoUrl, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
 }
 
 async function handleSearch(chatId, query) {
@@ -693,5 +706,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v62 - Final)...");
+console.log("Starting Adiza All-In-One Downloader (v63 - Photo Rotation)...");
 Deno.serve(handler);
