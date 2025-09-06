@@ -9,6 +9,21 @@ const MAX_FILE_SIZE_MB = 49;
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999; // Your Telegram User ID for Admin commands
 
+// --- Direct MP3 API Config ---
+const DIRECT_API = {
+    base: "https://media.savetube.me/api",
+    cdn: "/random-cdn",
+    info: "/v2/info",
+    download: "/download",
+    headers: {
+        'accept': '*/*',
+        'content-type': 'application/json',
+        'origin': 'https://yt.savetube.me',
+        'referer': 'https://yt.savetube.me/',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+    }
+};
+
 // --- External Libraries ---
 import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
 
@@ -111,7 +126,7 @@ async function handleCallbackQuery(callbackQuery) {
             const [format, videoId] = payload.split(":");
             const videoUrl = `https://youtu.be/${videoId}`;
             await editMessageText("✅ Request accepted! Sending file to your DMs...", { inline_message_id, reply_markup: {inline_keyboard: []} });
-            await startDownload(userId, userId, videoUrl, format, true); // Pass inline flag
+            await startDownload(userId, userId, videoUrl, format, true);
         } else if (action === "formats") {
              const videoId = payload;
              await answerCallbackQuery(callbackQuery.id);
@@ -135,7 +150,6 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             return;
         }
-        // This combines all settings-related callbacks into one handler.
         if (action.startsWith("settings") || action.startsWith("back_to_") || action.startsWith("user_") || action.startsWith("set_default") || action.startsWith("help_")) {
             await handleSettingsCallbacks(callbackQuery);
             return;
@@ -202,7 +216,7 @@ async function searchYoutube(query) {
     }
 }
 
-// --- Main Download Logic ---
+// --- Main Download Logic (Hybrid Approach) ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? `${chatId}:${Date.now()}` : `${chatId}:${statusMsg.result.message_id}`;
@@ -213,42 +227,44 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
     
     try {
         if (!isInline) await editMessageText(`🔎 Analyzing link...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        
         const info = await getVideoInfo(videoUrl);
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
-        const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        // --- START OF THE FIX ---
-        // For MP3s, we skip the HEAD check because the worker doesn't support it.
-        if (format !== 'mp3') {
+        let fileBlob;
+
+        // --- HYBRID LOGIC START ---
+        if (format === 'mp3') {
+            // Use the direct savetube API for MP3s
+            if (!isInline) await editMessageText(`🎧 Fetching MP3 directly...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+            fileBlob = await getDirectMp3(videoUrl, controller.signal);
+        } else {
+            // Use your Cloudflare Worker for all video formats
+            const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
+            
             if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
             const headRes = await fetch(downloadUrl, { method: 'HEAD', signal: controller.signal });
-            if (!headRes.ok) {
-                 throw new Error(`The download server check failed with status: ${headRes.status}.`);
-            }
+            if (!headRes.ok) throw new Error(`Server check failed: ${headRes.status}`);
+            
             const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
             const fileSizeMB = contentLength / (1024 * 1024);
             if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                 const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\nPlease use the direct link to download.`;
-                 if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-                 else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-                 return; 
+                const largeFileMessage = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
+                if (isInline) await sendTelegramMessage(chatId, largeFileMessage, { reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+                else await editMessageText(largeFileMessage, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+                return;
             }
-        }
-        // --- END OF THE FIX ---
 
-        if (!isInline) await editMessageText(`🚀 Downloading file...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-        
-        const fileRes = await fetch(downloadUrl, { signal: controller.signal });
-
-        // This check is still necessary to catch errors during the actual download.
-        if (!fileRes.ok) {
-            throw new Error(`Download worker responded with error status: ${fileRes.status}`);
+            if (!isInline) await editMessageText(`🚀 Downloading from worker...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+            const fileRes = await fetch(downloadUrl, { signal: controller.signal });
+            if (!fileRes.ok) throw new Error(`Worker download failed: ${fileRes.status}`);
+            fileBlob = await fileRes.blob();
         }
-        
-        const fileBlob = await fileRes.blob();
+        // --- HYBRID LOGIC END ---
+
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
         
-        const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
+        const fileType = format === 'mp3' ? 'audio' : 'video';
         const fileExtension = fileType === 'audio' ? 'mp3' : 'mp4';
         const fileName = `${safeTitle}.${fileExtension}`;
         
@@ -268,7 +284,72 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
     }
 }
 
-// --- Helper Functions ---
+// --- DIRECT MP3 HELPER FUNCTIONS ---
+async function getDirectMp3(youtubeUrl, signal) {
+    const cdnResponse = await fetch(`${DIRECT_API.base}${DIRECT_API.cdn}`, { headers: DIRECT_API.headers, signal });
+    if (!cdnResponse.ok) throw new Error(`Direct API: CDN request failed: ${cdnResponse.status}`);
+    const { cdn } = await cdnResponse.json();
+    const cdnHost = `https://${cdn}`;
+
+    const youtubeId = getYoutubeId(youtubeUrl);
+    if (!youtubeId) throw new Error("Direct API: Invalid YouTube URL");
+
+    const infoResponse = await fetch(`${cdnHost}${DIRECT_API.info}`, {
+        method: 'POST',
+        headers: DIRECT_API.headers,
+        body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${youtubeId}` }),
+        signal
+    });
+    if (!infoResponse.ok) throw new Error(`Direct API: Info request failed: ${infoResponse.status}`);
+    const infoData = await infoResponse.json();
+    if (!infoData.data) throw new Error("Direct API: No encrypted data in info response.");
+    const decryptedInfo = await decryptApiData(infoData.data);
+
+    const downloadApiResponse = await fetch(`${cdnHost}${DIRECT_API.download}`, {
+        method: 'POST',
+        headers: DIRECT_API.headers,
+        body: JSON.stringify({ id: youtubeId, downloadType: 'audio', quality: '128', key: decryptedInfo.key }),
+        signal
+    });
+    if (!downloadApiResponse.ok) throw new Error(`Direct API: Download call failed: ${downloadApiResponse.status}`);
+    const downloadData = await downloadApiResponse.json();
+    if (!downloadData.data || !downloadData.data.downloadUrl) throw new Error("Direct API: No download URL in final response.");
+
+    const fileResponse = await fetch(downloadData.data.downloadUrl, { headers: { 'Referer': 'https://yt.savetube.me/' }, signal });
+    if (!fileResponse.ok) throw new Error(`Direct API: Final file fetch failed: ${fileResponse.status}`);
+    
+    return fileResponse.blob();
+}
+
+function getYoutubeId(url) {
+    if (!url) return null;
+    const patterns = [
+        /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:watch\?v=|v\/|embed\/|shorts\/|)([\w-]{11})/,
+        /(?:https?:\/\/)?youtu\.be\/([\w-]{11})/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) return match[1];
+    }
+    return null;
+}
+
+async function decryptApiData(encryptedBase64) {
+    const key = hexToUint8Array('C5D58EF67A7584E4A29F6C35BBC4EB12');
+    const data = atob(encryptedBase64);
+    const iv = new Uint8Array(data.slice(0, 16).split('').map(c => c.charCodeAt(0)));
+    const content = new Uint8Array(data.slice(16).split('').map(c => c.charCodeAt(0)));
+    const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-CBC' }, false, ['decrypt']);
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, cryptoKey, content);
+    return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+function hexToUint8Array(hex) {
+    return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+}
+
+
+// --- OTHER HELPER FUNCTIONS ---
 async function handleSettingsCallbacks(callbackQuery) {
     const { data, message, from } = callbackQuery;
     const [action, ...payloadParts] = data.split("|");
@@ -277,7 +358,6 @@ async function handleSettingsCallbacks(callbackQuery) {
     const messageId = message.message_id;
     const userId = from.id;
 
-    // Use a switch for cleaner logic
     switch(action) {
         case "settings_menu":
             await answerCallbackQuery(callbackQuery.id);
@@ -302,7 +382,6 @@ async function handleSettingsCallbacks(callbackQuery) {
             await sendSettingsMessage(chatId, messageId, true);
             break;
         case "help_menu":
-            // --- FIX #2: RESTORED YOUR ORIGINAL HELP TEXT ---
             const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
             await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
             break;
@@ -434,5 +513,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v40 - Final Patch)...");
+console.log("Starting Adiza Downloader Bot (v41 - Final Hybrid Approach)...");
 Deno.serve(handler);
