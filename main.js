@@ -9,25 +9,22 @@ const MAX_FILE_SIZE_MB = 49;
 
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
-    "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE",
-    "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
-    "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ",
-    "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
-    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE", 
-    "CAACAgUAAxkBAAE6q7dou5WIlhBfKD6h3wWmZpoePIGWSAACDBEAApkMcFRMS-HQnAqmzzYE",
-    "CAACAgUAAxkBAAE6q7lou5WM-I1TWj6Z5u6iER70yqszCQACphgAAnLIyFeyFwmm5dR_8zYE",
-    "CAACAgUAAxkBAAE6q7tou5WR18mZRfVWpSXXMevkTKoTKAAC7BAAAkSw2FQUETd0uSTUdTYE",
-    "CAACAgUAAxkBAAE6q71ou5XOmUTrhmn8-jWpplgzJ-fxcwACdxEAAk7CIFXNdisJ2fejnTYE",
-    "CAACAgUAAxkBAAE6q79ou5Xa16ci77HKeE53XaQ_C4wqKAACXRAAAtGVYVQB72w7kFjy1jYE",
-    "CAACAgUAAxkBAAE6q8Fou5XlYVE8etdE36V1cvEWyhQM-gACLhEAAoaQCVeBaEKoltXVFzYE",
-    "CAACAgUAAxkBAAE6q8Nou5X-WlD8j5XFxMCjfHcel3GNdQACRQADunh9JkKCie3gP8QLNgQ"
+    "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
+    "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ", "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
+    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE", "CAACAgUAAxkBAAE6q7dou5WIlhBfKD6h3wWmZpoePIGWSAACDBEAApkMcFRMS-HQnAqmzzYE",
+    "CAACAgUAAxkBAAE6q7lou5WM-I1TWj6Z5u6iER70yqszCQACphgAAnLIyFeyFwmm5dR_8zYE", "CAACAgUAAxkBAAE6q7tou5WR18mZRfVWpSXXMevkTKoTKAAC7BAAAkSw2FQUETd0uSTUdTYE",
+    "CAACAgUAAxkBAAE6q71ou5XOmUTrhmn8-jWpplgzJ-fxcwACdxEAAk7CIFXNdisJ2fejnTYE", "CAACAgUAAxkBAAE6q79ou5Xa16ci77HKeE53XaQ_C4wqKAACXRAAAtGVYVQB72w7kFjy1jYE",
+    "CAACAgUAAxkBAAE6q8Fou5XlYVE8etdE36V1cvEWyhQM-gACLhEAAoaQCVeBaEKoltXVFzYE", "CAACAgUAAxkBAAE6q8Nou5X-WlD8j5XFxMCjfHcel3GNdQACRQADunh9JkKCie3gP8QLNgQ"
 ];
+
+// --- State Management ---
+let stickerCounter = 0;
+const activeDownloads = new Map();
 
 // --- Main Request Handler ---
 async function handler(req) {
   if (req.method !== "POST") return new Response("Not Allowed", { status: 405 });
   if (!BOT_TOKEN) return new Response("Internal Error: BOT_TOKEN not set", { status: 500 });
-
   try {
     const update = await req.json();
     if (update.callback_query) {
@@ -42,7 +39,7 @@ async function handler(req) {
   }
 }
 
-// --- NEW HELPER: Delay Function ---
+// --- Helper: Delay Function ---
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -51,22 +48,25 @@ function delay(ms) {
 async function handleMessage(message) {
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
+  const user = message.from;
 
   if (text === "/start") {
-    // Send a random welcome sticker
+    // Send a sequential welcome sticker
     if (WELCOME_STICKER_IDS.length > 0) {
-        const randomStickerId = WELCOME_STICKER_IDS[Math.floor(Math.random() * WELCOME_STICKER_IDS.length)];
-        await sendSticker(chatId, randomStickerId);
+        const stickerIndex = stickerCounter % WELCOME_STICKER_IDS.length;
+        await sendSticker(chatId, WELCOME_STICKER_IDS[stickerIndex]);
+        stickerCounter++;
     }
     
-    // --- Wait for 4 seconds ---
     await delay(4000);
     
-    const user = message.from;
+    const premiumBadge = user.is_premium ? "⭐" : "👤";
     const welcomeMessage = `
-👋 <b>Hello, ${user.first_name}! Welcome to Adiza YouTube Downloader!</b> 🌹
+👋 Hello, <b>${user.first_name}</b>! ${premiumBadge}
+Your User ID is: <code>${user.id}</code>
 
-Paste a YouTube link to get started or use /settings to customize your experience.
+Welcome to Adiza YouTube Downloader! 🌹
+Paste a YouTube link or use /settings to customize your experience.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -75,15 +75,9 @@ Paste a YouTube link to get started or use /settings to customize your experienc
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
   
   } else if (text === "/settings") {
-    const settingsMessage = "⚙️ *User Settings*\n\n_This feature is coming soon! You will be able to customize your default download quality and more._";
-    await sendTelegramMessage(chatId, settingsMessage, { parse_mode: 'Markdown' });
-
+    await sendTelegramMessage(chatId, "⚙️ *User Settings*\n\n_This feature is coming soon!_", { parse_mode: 'Markdown' });
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
-    const keyboard = createFormatButtons(text);
-    await sendTelegramMessage(chatId, "Please choose a format to download:", {
-      reply_markup: { inline_keyboard: keyboard }
-    });
-  
+    await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
   } else {
     await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
   }
@@ -92,50 +86,63 @@ Paste a YouTube link to get started or use /settings to customize your experienc
 async function handleCallbackQuery(callbackQuery) {
   const { data, message } = callbackQuery;
   const chatId = message.chat.id;
-  const [format, videoUrl] = data.split("|");
+  const [action, payload] = data.split("|");
+
+  if (action === "cancel") {
+      const controller = activeDownloads.get(payload);
+      if (controller) {
+          controller.abort();
+          activeDownloads.delete(payload);
+          await editMessageText(chatId, message.message_id, "<i>❌ Download Canceled.</i>");
+      }
+      return;
+  }
+  
+  const videoUrl = payload;
+  const format = action;
   
   await answerCallbackQuery(callbackQuery.id, `Processing ${format.toUpperCase()}...`);
   const statusMsg = await sendTelegramMessage(chatId, `<i>⏳ Processing request...</i>`);
+  const downloadKey = `${chatId}:${statusMsg.result.message_id}`;
+  const controller = new AbortController();
+  activeDownloads.set(downloadKey, controller);
+
+  const cancelBtn = { text: "❌ Cancel", callback_data: `cancel|${downloadKey}` };
 
   try {
-    await editMessageText(chatId, statusMsg.result.message_id, `<i>🔎 Analyzing link...</i>`);
+    await editMessageText(chatId, statusMsg.result.message_id, `<i>🔎 Analyzing link...</i>`, { reply_markup: { inline_keyboard: [[cancelBtn]] } });
     const info = await getVideoInfo(videoUrl);
     const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
-
     const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
-    await editMessageText(chatId, statusMsg.result.message_id, `<i>💾 Checking file size...</i>`);
-    const headRes = await fetch(downloadUrl, { method: 'HEAD' });
+
+    await editMessageText(chatId, statusMsg.result.message_id, `<i>💾 Checking file size...</i>`, { reply_markup: { inline_keyboard: [[cancelBtn]] } });
+    const headRes = await fetch(downloadUrl, { method: 'HEAD', signal: controller.signal });
     const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
     const fileSizeMB = contentLength / (1024 * 1024);
 
     if (fileSizeMB > 0 && fileSizeMB < MAX_FILE_SIZE_MB) {
-      await editMessageText(chatId, statusMsg.result.message_id, `<i>🚀 Downloading to our server...</i>`);
-      const fileRes = await fetch(downloadUrl);
+      await editMessageText(chatId, statusMsg.result.message_id, `<i>🚀 Downloading to our server...</i>`, { reply_markup: { inline_keyboard: [[cancelBtn]] } });
+      const fileRes = await fetch(downloadUrl, { signal: controller.signal });
       const fileBlob = await fileRes.blob();
       
       await editMessageText(chatId, statusMsg.result.message_id, `<i>✅ Uploading to you...</i>`);
-      
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-      const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
-      
+      const fileName = `${safeTitle}.${fileType}`;
       await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      const messageText = `
-⚠️ <b>File Too Large for Telegram!</b> ⚠️
-
-The selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
-
-Please use the direct download link below.
-      `;
-      const formatDisplay = format.toLowerCase() === 'mp3' ? 'MP3' : `${format}p`;
-      const inline_keyboard = [[{ text: `🔗 Download ${formatDisplay} 🔮`, url: downloadUrl }]];
-      await editMessageText(chatId, statusMsg.result.message_id, messageText.trim(), { reply_markup: { inline_keyboard } });
+      const messageText = `⚠️ <b>File Too Large!</b>\nThe file is ${fileSizeMB.toFixed(2)}MB. Please use the direct link.`;
+      const inline_keyboard = [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]];
+      await editMessageText(chatId, statusMsg.result.message_id, messageText, { reply_markup: { inline_keyboard } });
     }
   } catch (error) {
-    console.error("Download handling error:", error);
-    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
+    if (error.name !== 'AbortError') {
+      console.error("Download handling error:", error);
+      await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred.");
+    }
+  } finally {
+      activeDownloads.delete(downloadKey);
   }
 }
 
@@ -187,24 +194,19 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
-    
     let inline_keyboard = [[
         { text: "Share ↪️", switch_inline_query: "" },
         { text: "🔮 More Bots 🔮", url: CHANNEL_URL }
     ]];
-
     if (type === 'audio' && title) {
         const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
     }
-    
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
-    
     if (type === 'audio') {
         formData.append('title', title || 'Unknown Title');
         formData.append('performer', `Via @${BOT_USERNAME}`);
     }
-
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
     await fetch(url, { method: 'POST', body: formData });
 }
@@ -213,10 +215,8 @@ function createFormatButtons(videoUrl) {
     const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
     const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '⚡', '360p': '🔮', '480p': '📺', '720p': '🗳', '1080p': '💎' };
     let rows = [], currentRow = [];
-    
     formats.forEach(f => {
         const quality = f.toLowerCase() === 'mp3' ? 'mp3' : f.toLowerCase().replace('p', '');
-        const icon = formatMap[f.toLowerCase()] || '💾';
         currentRow.push({ text: `${icon} ${f.toUpperCase()}`, callback_data: `${quality}|${videoUrl}` });
         if (currentRow.length === 3) {
             rows.push(currentRow);
@@ -228,5 +228,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v7 - Delayed Welcome)...");
+console.log("Starting final professional bot server (v8 - Ultimate)...");
 Deno.serve(handler);
