@@ -1,9 +1,9 @@
 // --- Bot Configuration ---
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const YOUR_API_BASE_URL = "https://adiza-yt-pro-downloader.matrixzat99.workers.dev";
-const START_PHOTO_URL = "https://i.ibb.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
+const START_PHOTO_URL = "https://i.```.co/dZ7cvt5/233-59-373-4312-20250515-183222.jpg";
 const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
-const CHANNEL_URL = "https://t.me/QueenAdiza";
+const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n"; // Your channel link for the "More Bots" button
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
 
@@ -82,15 +82,12 @@ async function handleCallbackQuery(callbackQuery) {
       const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
       const fileName = `${safeTitle}.${format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4'}`;
       
-      await sendMedia(chatId, fileBlob, fileType, `Via @${BOT_USERNAME}`, fileName, safeTitle);
+      await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, safeTitle);
       await deleteMessage(chatId, statusMsg.result.message_id);
 
     } else {
-      // THIS IS THE NEW, ADVANCED MESSAGE FOR LARGE FILES
       const messageText = `
-⚠️ <b>File Too Large for Telegram!</b> ⚠️
-
-The selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
+⚠️ <b>File Too Large for Telegram!</b> ⚠️```he selected file (${fileSizeMB > 0 ? fileSizeMB.toFixed(2) + 'MB' : 'Unknown size'}) exceeds Telegram's 50MB limit for bots.
 
 Please use the direct download link below.
       `;
@@ -106,7 +103,7 @@ Please use the direct download link below.
     }
   } catch (error) {
     console.error("Download handling error:", error);
-    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry, an error occurred while downloading.");
+    await editMessageText(chatId, statusMsg.result.message_id, "❌ Sorry```n error occurred while downloading.");
   }
 }
 
@@ -130,7 +127,7 @@ async function apiRequest(method, params = {}) {
 }
 
 async function sendTelegramMessage(chatId, text, extraParams = {}) {
-  return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extraParams });
+  return await apiRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extraParams```;
 }
 
 async function sendPhoto(chatId, photoUrl, caption, extraParams = {}) {
@@ -149,14 +146,22 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
+// THIS IS THE NEWLY UPGRADED sendMedia FUNCTION
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append(type, blob, fileName);
     formData.append('caption', caption);
     
+    // Create the new inline keyboard for sharing
+    const inline_keyboard = [[
+        { text: "Share ↪️", switch_inline_query: "" },
+        { text: "🔮 More Bots 🔮", url: CHANNEL_URL }
+    ]];
+    formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
+    
     if (type === 'audio') {
-        formData.append('title', title || 'Unknown');
+        formData.append('title', title || 'Unknown Title');
         formData.append('performer', `Via @${BOT_USERNAME}`);
     }
 
@@ -166,7 +171,7 @@ async function sendMedia(chatId, blob, type, caption, fileName, title) {
 
 function createFormatButtons(videoUrl) {
     const formats = ['MP3', '144p', '240p', '360p', '480p', '720p', '1080p'];
-    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '📼', '360p': '📼', '480p': '📺', '720p': '🔥', '1080p': '💎' };
+    const formatMap = { 'mp3': '🎵', '144p': '📼', '240p': '⚡', '360p': '🔮', '480p': '📺', '720p': '🗳', '1080p': '💎' };
     let rows = [], currentRow = [];
     
     formats.forEach(f => {
@@ -183,5 +188,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final stable bot server (v3)...");
+console.log("Starting final professional bot server (v4)...");
 Deno.serve(handler);
