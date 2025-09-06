@@ -7,13 +7,20 @@ const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
 
-// --- NEW: Array of Welcome Sticker File IDs ---
+// --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE",
     "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
     "CAACAgIAAxkBAAE6q6Fou5MX6nv0HE5duKOzHhvyR08osQACRgADUomRI_j-5eQK1QodNgQ",
     "CAACAgIAAxkBAAE6q59ou5MNTS_iZ5hTleMdiDQbVuh4rQACSQADUomRI4zdJVjkz_fvNgQ",
-    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE"
+    "CAACAgIAAxkBAAE6q51ou5L3EZV6j-3b2pPqjIEN4ewQgAAC1QUAAj-VzAr0FV2u85b8KDYE", 
+    "CAACAgUAAxkBAAE6q7dou5WIlhBfKD6h3wWmZpoePIGWSAACDBEAApkMcFRMS-HQnAqmzzYE",
+    "CAACAgUAAxkBAAE6q7lou5WM-I1TWj6Z5u6iER70yqszCQACphgAAnLIyFeyFwmm5dR_8zYE",
+    "CAACAgUAAxkBAAE6q7tou5WR18mZRfVWpSXXMevkTKoTKAAC7BAAAkSw2FQUETd0uSTUdTYE",
+    "CAACAgUAAxkBAAE6q71ou5XOmUTrhmn8-jWpplgzJ-fxcwACdxEAAk7CIFXNdisJ2fejnTYE",
+    "CAACAgUAAxkBAAE6q79ou5Xa16ci77HKeE53XaQ_C4wqKAACXRAAAtGVYVQB72w7kFjy1jYE",
+    "CAACAgUAAxkBAAE6q8Fou5XlYVE8etdE36V1cvEWyhQM-gACLhEAAoaQCVeBaEKoltXVFzYE",
+    "CAACAgUAAxkBAAE6q8Nou5X-WlD8j5XFxMCjfHcel3GNdQACRQADunh9JkKCie3gP8QLNgQ"
 ];
 
 // --- Main Request Handler ---
@@ -35,17 +42,25 @@ async function handler(req) {
   }
 }
 
+// --- NEW HELPER: Delay Function ---
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // --- Logic Handlers ---
 async function handleMessage(message) {
   const chatId = message.chat.id;
   const text = (message.text || "").trim();
 
   if (text === "/start") {
-    // --- Send a random welcome sticker ---
+    // Send a random welcome sticker
     if (WELCOME_STICKER_IDS.length > 0) {
         const randomStickerId = WELCOME_STICKER_IDS[Math.floor(Math.random() * WELCOME_STICKER_IDS.length)];
         await sendSticker(chatId, randomStickerId);
     }
+    
+    // --- Wait for 4 seconds ---
+    await delay(4000);
     
     const user = message.from;
     const welcomeMessage = `
@@ -213,5 +228,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v6 - Random Stickers)...");
+console.log("Starting final professional bot server (v7 - Delayed Welcome)...");
 Deno.serve(handler);
