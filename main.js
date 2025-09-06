@@ -233,7 +233,7 @@ async function searchYoutube(query) {
     }
 }
 
-// --- Main Download Logic (WITH UNIFIED SIZE CHECK) ---
+// --- Main Download Logic (MP3 FIX) ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? `${chatId}:${Date.now()}` : `${chatId}:${statusMsg.result.message_id}`;
@@ -252,20 +252,22 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
             ? `https://cdn402.savetube.su/download?url=${encodeURIComponent(videoUrl)}&format=mp3`
             : `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
 
+        if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+
+        // --- FIXED LOGIC: Use GET for everything, but check headers first ---
         const fetchOptions = {
-            method: 'HEAD',
+            method: 'GET', // Always use GET
             signal: controller.signal,
             headers: isMp3 ? {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Referer': 'https://yt.savetube.me/'
             } : {}
         };
-
-        if (!isInline) await editMessageText(`💾 Checking file size...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-        const headRes = await fetch(downloadUrl, fetchOptions);
-        if (!headRes.ok) throw new Error(`Server check failed: ${headRes.status} ${headRes.statusText}`);
         
-        const contentLength = parseInt(headRes.headers.get('content-length') || "0", 10);
+        const fileRes = await fetch(downloadUrl, fetchOptions);
+        if (!fileRes.ok) throw new Error(`Download failed: ${fileRes.status} ${fileRes.statusText}`);
+
+        const contentLength = parseInt(fileRes.headers.get('content-length') || "0", 10);
         const fileSizeMB = contentLength / (1024 * 1024);
 
         if (fileSizeMB > MAX_FILE_SIZE_MB) {
@@ -278,10 +280,6 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false)
 
         if (!isInline) await editMessageText(`🚀 Downloading...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
         
-        // Use GET for the actual download
-        fetchOptions.method = 'GET';
-        const fileRes = await fetch(downloadUrl, fetchOptions);
-        if (!fileRes.ok) throw new Error(`Download failed: ${fileRes.status}`);
         const fileBlob = await fileRes.blob();
 
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
@@ -446,5 +444,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v45 - Unified Size Check)...");
+console.log("Starting Adiza Downloader Bot (v46 - MP3 HEAD Fix)...");
 Deno.serve(handler);
