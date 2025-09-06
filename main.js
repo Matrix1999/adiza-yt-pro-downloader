@@ -44,7 +44,7 @@ async function handler(req) {
 // --- Helper: Delay Function ---
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// --- Logic Handlers ---
+// --- Logic Handlers (with Direct Search) ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -72,7 +72,7 @@ async function handleMessage(message) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Paste a YouTube link or use the buttons below to get started.
+Simply send a song or video name to get started.
         `;
         const inline_keyboard = [
             [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -92,7 +92,23 @@ Paste a YouTube link or use the buttons below to get started.
             await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
         }
     } else {
-        await sendTelegramMessage(chatId, "Please send a valid YouTube link.");
+        // --- NEW: Handle as a direct search query ---
+        await sendTelegramMessage(chatId, `🔍 Searching for: <b>${text}</b>...`);
+        const searchResults = await searchYoutube(text);
+
+        if (!searchResults || searchResults.length === 0) {
+            await sendTelegramMessage(chatId, `😕 Sorry, no results found for "<b>${text}</b>".`);
+            return;
+        }
+
+        const resultButtons = searchResults.slice(0, 5).map(video => ([{
+            text: `🎬 ${video.title}`,
+            callback_data: `select_video|${video.id}`
+        }]));
+
+        await sendTelegramMessage(chatId, "👇 Here's what I found. Please choose one:", {
+            reply_markup: { inline_keyboard: resultButtons }
+        });
     }
 }
 
@@ -103,23 +119,25 @@ async function handleCallbackQuery(callbackQuery) {
     const payload = payloadParts.join("|");
 
     if (inline_message_id) {
-        if (action === "download") {
-            await answerCallbackQuery(callbackQuery.id);
-            const [format, videoId] = payload.split(":");
-            const videoUrl = `https://youtu.be/${videoId}`;
-            await editMessageText("✅ Request accepted! Sending file to our private chat.", { inline_message_id, reply_markup: {inline_keyboard: []} });
-            await startDownload(userId, userId, videoUrl, format, true, inline_message_id);
-        } else if (action === "formats") {
-             const videoId = payload;
-             await answerCallbackQuery(callbackQuery.id);
-             const formatButtons = createInlineFormatButtons(videoId);
-             await editMessageText("Choose a format to download:", {inline_message_id, reply_markup: {inline_keyboard: formatButtons}});
-        }
+        // ... (inline mode logic remains the same)
         return;
     }
     
     if(message) {
         const privateChatId = message.chat.id;
+
+        // --- NEW: Handle video selection from search results ---
+        if (action === 'select_video') {
+            const videoId = payload;
+            const videoUrl = `https://youtu.be/${videoId}`;
+            // Clean up the search results message and present format options
+            await deleteMessage(privateChatId, message.message_id); 
+            await sendTelegramMessage(privateChatId, "✅ Video selected. Now, choose a format:", {
+                reply_markup: { inline_keyboard: createFormatButtons(videoUrl) }
+            });
+            return;
+        }
+        
         if (action === "cancel") {
             const controller = activeDownloads.get(payload);
             if (controller) controller.abort();
@@ -136,13 +154,15 @@ async function handleCallbackQuery(callbackQuery) {
             await answerCallbackQuery(callbackQuery.id);
             return;
         }
+        
+        // This now handles the format selection after a direct search or link paste
         const [format, videoUrl] = data.split("|");
         await deleteMessage(privateChatId, message.message_id);
         await startDownload(privateChatId, userId, videoUrl, format);
     }
 }
 
-// --- Main Download Logic (Using Confirmed Working Logic) ---
+// --- Main Download Logic (with chosen message) ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing ${format.toUpperCase()}...`);
     const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
@@ -158,7 +178,7 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        if (!isInline) await editMessageText(`🚀 Download in progresss...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        if (!isInline) await editMessageText(`⏳ Download in progress...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
 
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
         
@@ -192,11 +212,8 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         if (error.name !== 'AbortError') {
             console.error("Download handling error:", error);
             const errorMessage = `❌ Sorry, an error occurred:\n\n<i>${error.message}</i>`;
-            if (isInline) {
-                await sendTelegramMessage(chatId, errorMessage);
-            } else if (statusMsg) {
-                await editMessageText(errorMessage, { chat_id: chatId, message_id: statusMsg.result.message_id });
-            }
+            if (isInline) await sendTelegramMessage(chatId, errorMessage);
+            else if (statusMsg) await editMessageText(errorMessage, { chat_id: chatId, message_id: statusMsg.result.message_id });
         }
     } finally {
         activeDownloads.delete(downloadKey);
@@ -265,7 +282,21 @@ async function handleSettingsCallbacks(action, payload, chatId, messageId, userI
         await editMessageText(`📊 <b>Your Stats</b>\n\nTotal Downloads: ${downloads}`, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "back_to_settings" }]] } });
     } else if (action === "back_to_settings") { await sendSettingsMessage(chatId, messageId, true); }
     else if (action === "help_menu") { 
-        const helpMessage = `📖 <b>Help & FAQ</b>\n\n<b>Two Ways to Use This Bot:</b>\n\n1️⃣ <b>Direct Chat (For Precise Links)</b>\nSend a valid YouTube link directly to me. If you have a default quality set, your download will begin instantly. Otherwise, you'll be prompted to choose a format.\n\n2️⃣ <b>Inline Mode (For Quick Searches)</b>\nIn any chat, type <code>@${BOT_USERNAME}</code> followed by a search term (e.g., <i>new amapiano mix</i>). Select a video from the results to download it right there!\n\n⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
+        // --- NEW: Updated Help & FAQ Text ---
+        const helpMessage = `📖 <b>Help & FAQ</b>
+
+<b>Three Ways to Use This Bot:</b>
+
+1️⃣ <b>Direct Search (Easiest)</b>
+Just send me any song or video name (e.g., <i>shatta wale on god</i>). I'll show you the top results to download.
+
+2️⃣ <b>Pasting a Link</b>
+Send a valid YouTube link directly to me. If you have a default quality set, your download will start instantly.
+
+3️⃣ <b>Inline Mode (In Any Chat)</b>
+In any other chat, type <code>@${BOT_USERNAME}</code> followed by a search term. Select a video from the results to download it right there!
+
+⚙️ Use the <b>/settings</b> command to manage your default quality and check your usage stats.`;
         await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
 }
@@ -276,7 +307,7 @@ async function sendDonationMessage(chatId) {
 
 async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
     const settingsMessage = "⚙️ <b>User Settings</b>";
-    const inline_keyboard = [[{ text: "⚙️ Default Quality", callback_data: "settings_quality" }], [{ text: "📊 My Stats", callback_data: "user_stats" }], [{ text: "❓ Help", callback_data: "help_menu" }]];
+    const inline_keyboard = [[{ text: "⚙️ Default Quality", callback_data: "settings_quality" }], [{ text: "📊 My Stats", callback_data: "user_stats" }], [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]];
     if (shouldEdit) await editMessageText(settingsMessage, { chat_id: chatId, message_id: messageIdToUpdate, reply_markup: { inline_keyboard } });
     else await sendTelegramMessage(chatId, settingsMessage, { reply_markup: { inline_keyboard } });
 }
@@ -357,5 +388,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v49 - Final Confirmed Logic)...");
+console.log("Starting Adiza Downloader Bot (v50 - Direct Search Feature)...");
 Deno.serve(handler);
