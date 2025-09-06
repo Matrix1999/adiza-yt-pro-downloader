@@ -6,6 +6,8 @@ const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
 const MAX_FILE_SIZE_MB = 49;
+// --- NEW: Add your Paystack Payment Page link here ---
+const DONATE_URL = "https://paystack.shop/pay/adiza-bot-donate"; // <-- IMPORTANT: Replace this
 
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
@@ -51,16 +53,12 @@ async function handleMessage(message) {
   const user = message.from;
 
   if (text === "/start") {
-    // Send a sequential welcome sticker
     if (WELCOME_STICKER_IDS.length > 0) {
         const stickerIndex = stickerCounter % WELCOME_STICKER_IDS.length;
         await sendSticker(chatId, WELCOME_STICKER_IDS[stickerIndex]);
         stickerCounter++;
     }
-    
     await delay(4000);
-    
-    // --- THIS IS THE NEW, UPGRADED WELCOME MESSAGE ---
     const userStatus = user.is_premium ? "⭐ Premium User" : "👤 Standard User";
     const welcomeMessage = `
 👋 Hello, <b>${user.first_name}</b>!
@@ -69,7 +67,7 @@ async function handleMessage(message) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Paste a YouTube link or use /settings to customize your experience.
+Paste a YouTube link, use /settings, or /donate to support us.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -79,6 +77,24 @@ Paste a YouTube link or use /settings to customize your experience.
   
   } else if (text === "/settings") {
     await sendTelegramMessage(chatId, "⚙️ *User Settings*\n\n_This feature is coming soon!_", { parse_mode: 'Markdown' });
+
+  } else if (text === "/donate") {
+    const donateMessage = `
+💖 **Support Adiza Bot!**
+
+Thank you for considering a donation! Your support helps cover server costs and allows me to keep adding new features.
+
+Click the button below to make a secure donation via Paystack.
+    `;
+    const inline_keyboard = [[{
+        text: "💳 Donate with Paystack",
+        url: DONATE_URL
+    }]];
+    await sendTelegramMessage(chatId, donateMessage.trim(), {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+    });
+
   } else if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
     await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: createFormatButtons(text) } });
   } else {
@@ -232,5 +248,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v10 - Final)...");
+console.log("Starting final professional bot server (v11 - Donate Feature)...");
 Deno.serve(handler);
