@@ -168,12 +168,10 @@ async function handleStart(message, referrerId) {
         await sendSticker(chatId, WELCOME_STICKER_IDS[stickerCount % WELCOME_STICKER_IDS.length]);
         await kv.set(["global", "stickerCounter"], stickerCount + 1);
     }
-    await delay(4000);
+    await delay(2000);
     
-    const userDb = (await kv.get(userKey)).value || {};
     const userStatus = await checkPremium(userId) ? "⭐ Premium User" : "👤 Standard User";
     
-    // Photo Rotation Logic
     const photoCount = (await kv.get(["global", "photoCounter"])).value || 0;
     const currentPhotoUrl = WELCOME_PHOTO_URLS[photoCount % WELCOME_PHOTO_URLS.length];
     await kv.set(["global", "photoCounter"], photoCount + 1);
@@ -188,8 +186,7 @@ Welcome to Adiza YouTube & TikTok Downloader! 🌹
 Send a YouTube or TikTok link, or use /settings to see all commands.
     `;
     const inline_keyboard = [
-        [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
-        [{ text: "👑 OWNER 👑", url: OWNER_URL }],
+        [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }, { text: "👑 OWNER 👑", url: OWNER_URL }],
         [{ text: "💖 Donate 💖", callback_data: "donate_now" }, { text: "⚙️ Settings", callback_data: "settings_menu" }],
         [{ text: "💎 Premium Hub", callback_data: "premium_hub" }]
     ];
@@ -314,7 +311,7 @@ Select an option to get your access details:
     `;
     const inline_keyboard = [
         [{ text: "🧠 ChatGPT-Pro", callback_data: "premium_service|chatgpt_pro" }, { text: "🎨 Canva Pro", callback_data: "premium_service|canva_pro" }],
-        [{ text: "📺 Netflix 4K", callback_data: "premium_service|netflix" }, {- text: "🎬 Prime Video", callback_data: "premium_service|prime_video" }],
+        [{ text: "📺 Netflix 4K", callback_data: "premium_service|netflix" }, { text: "🎬 Prime Video", callback_data: "premium_service|prime_video" }],
         [{ text: "🤔 Perplexity Pro", callback_data: "premium_service|perplexity_pro" }]
     ];
     await sendTelegramMessage(chatId, premiumHubMessage.trim(), { reply_markup: { inline_keyboard } });
@@ -405,93 +402,110 @@ async function handleCallbackQuery(callbackQuery) {
     }
     
     if (action === "premium_service") {
+        // Double-check premium status before showing details
+        const isPremium = await checkPremium(userId);
+        if (!isPremium) {
+            await answerCallbackQuery(callbackQuery.id, "🚫 Access Denied. This is for lifetime members only.", true);
+            return;
+        }
+
         const service = payload;
         let serviceMessage, serviceKeyboard;
 
-        if (service === "chatgpt_pro") {
-            serviceMessage = `
+        switch(service) {
+            case "chatgpt_pro":
+                serviceMessage = `
 🧠 **ChatGPT Plus Access**
 
 Your subscription is active. Follow these steps:
 
 1. Click the link to verify your access.
-2. Bookmark the link for future use.
+2. Bookmark the link! This is your key for the next 365 days.
 3. If you have issues, reopen the link to refresh.
 
-**Important:** Use a **USA VPN** for login.
-            `;
-            serviceKeyboard = [
-                [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
-                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-            ];
-        } else if (service === "netflix") {
-            serviceMessage = `
+<b>Important:</b> Use a <b>USA VPN</b> for login.
+                `;
+                serviceKeyboard = [
+                    [{ text: "🔑 Get Access Link", url: "https://www.oxaam.com/serviceaccess.php?activation_key=GW69ETWJYL6Y668" }],
+                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+                ];
+                break;
+
+            case "netflix":
+                serviceMessage = `
 ╔═════ ≪ 🔮 ≫ ═════╗
-   ❤️‍🔥🍿 **N E T F L I X** 🍿❤️‍🔥
+   ❤️‍🔥🍿 <b>N E T F L I X</b> 🍿❤️‍🔥
 ╚═════ ≪ •❈• ≫ ═════╝
-💎✨ **P R E M I U M** ✨💎
+💎✨ <b>P R E M I U M</b> ✨💎
 
-📧 **Email:** \`adizaqueen399@gmail.com\`
-🔐 **Password:** \`Ghana@2025\`
+📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
+🔐 <b>Password:</b> <code>Ghana@2025</code>
 
-✨ **Features** ✨
+✨ <b>Features</b> ✨
 📺 4K UHD 🌟
 ⬇️ Downloads 💾
 🌐 Access All Content 🌍
 📱 6 Devices Same Time ⌚
-            `;
-            serviceKeyboard = [[{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]];
-        } else if (service === "perplexity_pro") {
-            serviceMessage = `
-🤔 **Perplexity Pro Access**
+                `;
+                serviceKeyboard = [[{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]];
+                break;
+
+            case "perplexity_pro":
+                serviceMessage = `
+🤔 <b>Perplexity Pro Access</b>
 
 Here are your login details.
 
-📧 **Email:** \`Matrixzat99@gmail.com\`
+📧 <b>Email:</b> <code>Matrixzat99@gmail.com</code>
 
-**Login Instructions:**
+<b>Login Instructions:</b>
 1. Use the email above to log in.
 2. The service will ask for a verification code.
 3. Please DM the admin to receive your code.
-            `;
-            serviceKeyboard = [
-                [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
-                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-            ];
-        } else if (service === "canva_pro") {
-            serviceMessage = `
-🎨✨ **Canva Pro Account** ✨🎨
+                `;
+                serviceKeyboard = [
+                    [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
+                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+                ];
+                break;
+
+            case "canva_pro":
+                serviceMessage = `
+🎨✨ <b>Canva Pro Account</b> ✨🎨
 
 Your Canva Pro account is ready!
 
-📧 **Email:** \`adizaqueen399@gmail.com\`
+📧 <b>Email:</b> <code>adizaqueen399@gmail.com</code>
 
-**Verification:**
+<b>Verification:</b>
 If Canva asks for a verification code during login, please contact the admin to receive it.
-            `;
-            serviceKeyboard = [
-                [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
-                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-            ];
-        } else if (service === "prime_video") {
-            serviceMessage = `
-╔═════ ≪ •❈• ≫ ═════╗
-  🎬🔮 **PRIME VIDEO** 🔮🎬
-╚═════ ≪ •❈• ≫ ═════╝
-💎✨ **P R E M I U M** ✨💎
+                `;
+                serviceKeyboard = [
+                    [{ text: "👨‍💻 DM Admin for Code", url: OWNER_URL }],
+                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+                ];
+                break;
 
-✨ **Features** ✨
+            case "prime_video":
+                serviceMessage = `
+╔═════ ≪ •❈• ≫ ═════╗
+  🎬🔮 <b>PRIME VIDEO</b> 🔮🎬
+╚═════ ≪ •❈• ≫ ═════╝
+💎✨ <b>P R E M I U M</b> ✨💎
+
+✨ <b>Features</b> ✨
 📺 High Quality Streaming 🌟
 ⬇️ Downloads 💾
 🌐 Prime Video Library 🌍
 📱 Multiple Device Support ⌚
 
-*Prime Video offers a vast collection of movies, TV shows, and Amazon Originals...*
-            `;
-            serviceKeyboard = [
-                [{ text: "📲 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
-                [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
-            ];
+<i>Prime Video offers a vast collection of movies, TV shows, and Amazon Originals...</i>
+                `;
+                serviceKeyboard = [
+                    [{ text: "📲 Download App (APK)", url: "https://www.mediafire.com/file/41l5o85ifyjdohi/Prime_Video_VIP.apk/file" }],
+                    [{ text: "🔙 Back to Hub", callback_data: "premium_hub" }]
+                ];
+                break;
         }
 
         await editMessageText(serviceMessage, { 
@@ -572,9 +586,9 @@ async function spendCredit(chatId, userId) {
 }
 
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
-    const hasPremium = await checkPremium(userId);
+    const isUserPremium = await checkPremium(userId);
     
-    if (format === '1080' && !hasPremium) {
+    if (format === '1080' && !isUserPremium) {
         if(!(await spendCredit(chatId, userId))) {
             await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer to see your progress.`, {});
             return;
@@ -631,9 +645,9 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
 }
 
 async function startTikTokDownload(chatId, userId, url, format) {
-    const hasPremium = await checkPremium(userId);
+    const isUserPremium = await checkPremium(userId);
     
-    if (format === 'video_hd' && !hasPremium) {
+    if (format === 'video_hd' && !isUserPremium) {
         if(!(await spendCredit(chatId, userId))) {
              await sendTelegramMessage(chatId, `⭐ <b>HD Video is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer to see your progress.`, {});
             return;
@@ -767,7 +781,7 @@ There are two ways to get premium features:
 async function sendSettingsMessage(chatId, messageIdToUpdate = null, shouldEdit = false) {
     const settingsMessage = "⚙️ <b>User Settings</b>";
     const inline_keyboard = [
-        [{ text: "💎 Get Premium", callback_data: "get_premium" }, { text: "👑 Premium Hub", callback_data: "premium_hub" }],
+        [{ text: "💎 Get Premium", callback_data: "get_premium" }],
         [{ text: "⚙️ Default Quality", callback_data: "settings_quality" }],
         [{ text: "📊 My Stats", callback_data: "user_stats" }],
         [{ text: "❓ Help & FAQ", callback_data: "help_menu" }]
@@ -880,8 +894,9 @@ async function sendPhoto(chatId, photo, caption, extra = {}) { return await apiR
 async function sendSticker(chatId, sticker) { return await apiRequest('sendSticker', { chat_id: chatId, sticker }); }
 async function editMessageText(text, extra = {}) { return await apiRequest('editMessageText', { text, parse_mode: 'HTML', ...extra }); }
 async function deleteMessage(chatId, messageId) { return await apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
-async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
+async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
+
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v66 - Expanded Premium Hub)...");
+console.log("Starting Adiza All-In-One Downloader (v67 - Final Premium Hub)...");
 Deno.serve(handler);
