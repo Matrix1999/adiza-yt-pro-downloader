@@ -415,7 +415,6 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         
         if (isInline) {
             // For inline, we can't show progress, so we just acknowledge
-            // The main work happens in the background and file is sent upon completion
         } else {
              await editMessageText(`📞 Calling your API...`, editTarget);
         }
@@ -459,8 +458,6 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
         if (statusMsg && !isInline) {
             await editMessageText(errorMessage, editTarget);
         } else if (isInline) {
-            // We can't edit the inline message, so we send a new message to the user's chat.
-            // Note: `chatId` in inline mode is the user's ID.
             await sendTelegramMessage(chatId, errorMessage);
         }
     }
@@ -618,8 +615,9 @@ async function createFormatButtons(videoUrl, userId) {
     const user = (await kv.get(["users", userId])).value || {};
     const credits = user.premium_credits || 0;
     
-    const formats = ['mp3', '360', '720', '1080'];
-    const icons = { 'mp3': '🎵', '360': '🔮', '720': '🗳️', '1080': '💎' };
+    // RESTORED to your original format list
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const icons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳️', '1080': '💎' };
     
     let rows = [], currentRow = [];
     formats.forEach(f => {
@@ -628,7 +626,7 @@ async function createFormatButtons(videoUrl, userId) {
              buttonText = `⭐ ${buttonText} (${credits} credits)`;
         }
         currentRow.push({ text: buttonText, callback_data: `${f}|${videoUrl}` });
-        if(currentRow.length === 2) {
+        if(currentRow.length === 3) { // RESTORED to your original 3-button layout
             rows.push(currentRow);
             currentRow = [];
         }
@@ -665,6 +663,7 @@ async function createInlineFormatButtons(videoId, userId) {
         if (f === '1080' && !hasPremium) {
              buttonText = `⭐ ${buttonText} (${credits} credits)`;
         }
+        // Corrected format for inline callbacks
         currentRow.push({ text: buttonText, callback_data: `${f}:${videoId}` });
         if(currentRow.length === 2) {
             rows.push(currentRow);
@@ -708,5 +707,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Bot (v77 - Python API Integration)...");
+console.log("Starting Adiza Bot (v78 - Final Python API Integration)...");
 Deno.serve(handler);
