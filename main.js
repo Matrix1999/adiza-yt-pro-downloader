@@ -119,7 +119,7 @@ async function handleCallbackQuery(callbackQuery) {
             const fileSizeMB = contentLength / (1024 * 1024);
 
             if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                const messageText = `⚠️ <b>File Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
+                const messageText = `⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`;
                 await editMessageText(messageText, { 
                     inline_message_id, 
                     reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } 
@@ -201,7 +201,7 @@ async function handleInlineQuery(inlineQuery) {
             title: video.title,
             description: `Duration: ${video.length.simpleText}`,
             thumb_url: video.thumbnail.url,
-            input_message_content: { message_text: `*You selected:* ${video.title}\n\nPress the button below to choose a download format.` },
+            input_message_content: { message_text: `🎨𝗬𝗼𝘂 𝘀𝗲𝗹𝗲𝗰𝘁𝗲𝗱: ${video.title}\n\nPress the button below to choose a download format.` },
             reply_markup: {
                 inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]]
             }
@@ -267,7 +267,7 @@ async function startDownload(chatId, userId, videoUrl, format) {
         const fileSizeMB = contentLength / (1024 * 1024);
 
         if (fileSizeMB > MAX_FILE_SIZE_MB) {
-             await editMessageText(`⚠️ <b>File Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\nPlease use the direct link to download.`, { chat_id: chatId, message_id: statusMsg.result.message_id, reply_markup: { inline_keyboard: [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]] } });
+             await editMessageText(`⚠️ <b>File Is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\nPlease use the direct link to download.`, { chat_id: chatId, message_id: statusMsg.result.message_id, reply_markup: { inline_keyboard: [[{ text: `🔗 Download ${format.toUpperCase()} 🔮`, url: downloadUrl }]] } });
              return; 
         }
 
@@ -324,11 +324,11 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
-// --- New Helper for Inline Format Buttons ---
+// --- FIX 2: Corrected Inline Format Buttons to show ALL formats ---
 function createInlineFormatButtons(videoId) {
-    const formats = ['mp3', '360', '720'];
-    const formatLabels = { 'mp3': 'MP3', '360': '360p', '720': '720p' };
-    const formatIcons = { 'mp3': '🎵', '360': '📺', '720': '💎' };
+    const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
+    const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
+    const formatIcons = { 'mp3': '🎵', '144': '📼', '240': '⚡', '360': '🔮', '480': '📺', '720': '🗳', '1080': '💎' };
     let buttons = formats.map(f => ({ text: `${formatIcons[f]} ${formatLabels[f]}`, callback_data: `download|${f}:${videoId}` }));
     let rows = [];
     while (buttons.length > 0) rows.push(buttons.splice(0, 3));
@@ -379,22 +379,38 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
+// --- FIX 1: Corrected sendMedia function for proper MP3 handling ---
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
-    formData.append(type, blob, fileName);
     formData.append('caption', caption);
+
+    // This is the critical fix. We create a new `File` object from the downloaded
+    // data (blob) and explicitly set its `type`. This forces Telegram to
+    // recognize it as a proper audio file, not a video.
+    if (type === 'audio') {
+        const audioFile = new File([blob], fileName, { type: "audio/mpeg" });
+        formData.append('audio', audioFile);
+    } else {
+        const videoFile = new File([blob], fileName, { type: "video/mp4" });
+        formData.append('video', videoFile);
+    }
+    
     let inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
     if (type === 'audio' && title) {
         const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
     }
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
+    
     if (type === 'audio') {
         formData.append('title', title || 'Unknown Title');
         formData.append('performer', `Via @${BOT_USERNAME}`);
     }
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    
+    // Determine the correct Telegram API endpoint (/sendAudio or /sendVideo)
+    const endpoint = type === 'audio' ? 'sendAudio' : 'sendVideo';
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`;
     await fetch(url, { method: 'POST', body: formData });
 }
 
@@ -416,5 +432,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v30 - Definitive Final)...");
+console.log("Starting final professional bot server (v35 - Definitive MP3 Fix)...");
 Deno.serve(handler);
