@@ -13,7 +13,7 @@ const WELCOME_PHOTO_URLS = [
 export const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
-const MAX_FILE_SIZE_MB = 49;
+const MAX_FILE_SIZE_MB = 30; // UPDATED to 30MB as requested
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999;
 const REFERRAL_GOAL = 2; // Refer 2 users to get 1 credit
@@ -58,7 +58,7 @@ async function handler(req) {
 // --- Helper: Delay Function ---
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// --- Logic Handlers (Final Corrected Version) ---
+// --- Logic Handlers ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -92,37 +92,17 @@ async function handleMessage(message) {
 
     // --- User Commands ---
     switch (command) {
-        case "/start":
-            await handleStart(message, args[0]);
-            break;
-        case "/settings":
-            await sendSettingsMessage(chatId);
-            break;
-        case "/donate":
-            await sendDonationMessage(chatId);
-            break;
-        case "/refer":
-            await sendReferralMessage(chatId, userId);
-            break;
-        case "/premium_member":
-            await sendPremiumMemberMessage(chatId);
-            break;
-        case "/premium_hub":
-            await handlePremiumHubRequest(chatId, userId);
-            break;
-        case "/feedback":
-            await requestFeedback(chatId, userId);
-            break;
-        case "/cancel":
-            userState.delete(userId);
-            await sendTelegramMessage(chatId, "Operation canceled.");
-            break;
-        case "/search":
-            if (payload) {
-                await handleSearch(chatId, payload);
-            } else {
-                await sendTelegramMessage(chatId, "Please provide a search term. Usage: /search song name");
-            }
+        case "/start": await handleStart(message, args[0]); break;
+        case "/settings": await sendSettingsMessage(chatId); break;
+        case "/donate": await sendDonationMessage(chatId); break;
+        case "/refer": await sendReferralMessage(chatId, userId); break;
+        case "/premium_member": await sendPremiumMemberMessage(chatId); break;
+        case "/premium_hub": await handlePremiumHubRequest(chatId, userId); break;
+        case "/feedback": await requestFeedback(chatId, userId); break;
+        case "/cancel": userState.delete(userId); await sendTelegramMessage(chatId, "Operation canceled."); break;
+        case "/search": 
+            if (payload) { await handleSearch(chatId, payload); } 
+            else { await sendTelegramMessage(chatId, "Please provide a search term. Usage: /search song name"); }
             break;
         default:
             if (text.includes("youtube.com/") || text.includes("youtu.be/")) {
@@ -132,10 +112,9 @@ async function handleMessage(message) {
                 } else {
                     await sendTelegramMessage(chatId, "Please choose a format to download:", { reply_markup: { inline_keyboard: await createFormatButtons(text, userId) } });
                 }
-            } else if (text.includes("tiktok.com/")) { // TikTok link detection
+            } else if (text.includes("tiktok.com/")) {
                 await handleTikTokLink(chatId, userId, text);
-            }
-            else {
+            } else {
                 await sendTelegramMessage(chatId, "Sorry, I didn't understand that. Use /help to see available commands.");
             }
             break;
@@ -212,12 +191,9 @@ async function handleSearch(chatId, query) {
     });
 }
 
-// --- TikTok Link Handler ---
 async function handleTikTokLink(chatId, userId, url) {
     await sendTelegramMessage(chatId, "🔮 TikTok link detected! Choose your download format:", {
-        reply_markup: {
-            inline_keyboard: await createTikTokFormatButtons(url, userId)
-        }
+        reply_markup: { inline_keyboard: await createTikTokFormatButtons(url, userId) }
     });
 }
 
@@ -240,7 +216,6 @@ async function sendReferralMessage(chatId, userId) {
 🎉  <b>Invite Friends & Earn Premium!</b>
 
 Share your unique link. For every <b>${REFERRAL_GOAL} friends</b> who join, you'll get <b>1 Premium Credit</b>.
-
 Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 1080p & HD downloads.
 
 📊  <b>Your Status</b>
@@ -252,21 +227,16 @@ Each credit unlocks <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b> of unlimited 108
 <code>${referralLink}</code>
     `;
     
-    const inline_keyboard = [
-        [{ text: "📲 Share Your Link", switch_inline_query: `Join me on this awesome bot! ${referralLink}` }]
-    ];
-    
+    const inline_keyboard = [[{ text: "📲 Share Your Link", switch_inline_query: `Join me on this awesome bot! ${referralLink}` }]];
     await sendTelegramMessage(chatId, message.trim(), { reply_markup: { inline_keyboard }});
 }
 
 async function sendPremiumMemberMessage(chatId) {
     const premiumMessage = `
 💎 <b>ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴍᴇᴍʙᴇʀ!</b> 💎
-
 sᴜᴘᴘᴏʀᴛ ᴛʜᴇ ʙᴏᴛ's ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ ᴀɴᴅ sᴇʀᴠᴇʀ ᴄᴏsᴛs ᴡɪᴛʜ ᴀ ᴏɴᴇ-ᴛɪᴍᴇ ᴅᴏɴᴀᴛɪᴏɴ ᴏғ ʏᴏᴜʀ ᴄʜᴏɪᴄᴇ ᴛᴏ ɢᴇᴛ <b>ʟɪғᴇᴛɪᴍᴇ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴄᴇss</b> ᴛᴏ ᴀʟʟ ᴏᴜʀ sᴇʀᴠɪᴄᴇs—ʙᴏᴛʜ ᴄᴜʀʀᴇɴᴛ & ᴀʟʟ ғᴜᴛᴜʀᴇ ᴜᴘᴅᴀᴛᴇs!
 
 ✨ <b>ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʙᴇɴᴇғɪᴛs:</b>
-
 - 🎬 ᴜɴʟɪᴍɪᴛᴇᴅ 𝟷𝟶𝟾𝟶ᴘ ʏᴛ ᴅᴏᴡɴʟᴏᴀᴅs.
 - 🚀 ᴜɴʟɪᴍɪᴛᴇᴅ ʜᴅ ᴛɪᴋᴛᴏᴋ ᴅᴏᴡɴʟᴏᴀᴅs. 
 - ⚡ ᴘʀɪᴏʀɪᴛʏ ᴀᴄᴄᴇss ᴛᴏ ɴᴇᴡ ғᴇᴀᴛᴜʀᴇs. 
@@ -277,7 +247,6 @@ sᴜᴘᴘᴏʀᴛ ᴛʜᴇ ʙᴏᴛ's ᴅᴇᴠᴇʟᴏᴘᴍᴇɴᴛ ᴀɴᴅ 
 - 💎ᴀɴᴅ ᴍᴀɴʏ ᴍᴏʀᴇ.... 
 
 ⌛ᴛᴏ ɢᴇᴛ sᴛᴀʀᴛᴇᴅ, sɪᴍᴘʟʏ ᴍᴀᴋᴇ ᴀ ᴅᴏɴᴀᴛɪᴏɴ ᴏғ ɴᴏᴛ ʟᴇss ᴛʜᴀɴ 𝟺$ ᴛʜʀᴏᴜɢʜ ᴏᴜʀ sᴇᴄᴜʀᴇ ᴘᴀʏsᴛᴀᴄᴋ ʟɪɴᴋ. ᴀғᴛᴇʀ ᴅᴏɴᴀᴛɪɴɢ, ᴘʟᴇᴀsᴇ ᴄᴏɴᴛᴀᴄᴛ ᴛʜᴇ ᴀᴅᴍɪɴ ᴡɪᴛʜ ᴀ sᴄʀᴇᴇɴsʜᴏᴛ ᴏғ ʏᴏᴜʀ ʀᴇᴄᴇɪᴘᴛ ᴛᴏ ᴀᴄᴛɪᴠᴀᴛᴇ ʏᴏᴜʀ ʟɪғᴇᴛɪᴍᴇ ᴀᴄᴄᴇss.
-
 ᴛʜᴀɴᴋ ᴜ ғᴏʀ ʏᴏᴜʀ ɪɴᴄʀᴇᴅɪʙʟᴇ sᴜᴘᴘᴏʀᴛ!❤️
     `;
     const inline_keyboard = [
@@ -313,7 +282,7 @@ async function grantPremiumAccess(message, payload) {
     }
     await kv.set(userKey, { ...user, is_permanent_premium: true });
     await sendTelegramMessage(message.chat.id, `✅ User ${targetId} now has permanent premium.`);
-    await sendTelegramMessage(targetId, "🎉 Congratulations! You have been granted lifetime <b>Premium Access</b> by the admin! You can now download in 1080p/HD quality anytime.", {});
+    await sendTelegramMessage(targetId, "🎉 Congratulations! You have been granted lifetime <b>Premium Access</b> by the admin!", {});
 }
 
 async function handleBroadcast(message, payload) {
@@ -322,9 +291,7 @@ async function handleBroadcast(message, payload) {
         return;
     }
     const users = [];
-    for await (const entry of kv.list({ prefix: ["users"] })) {
-        users.push(entry.key[1]);
-    }
+    for await (const entry of kv.list({ prefix: ["users"] })) { users.push(entry.key[1]); }
     await sendTelegramMessage(message.chat.id, `🚀 Broadcasting to ${users.length} users...`);
     let successCount = 0;
     for (const userId of users) {
@@ -402,15 +369,13 @@ async function handleCallbackQuery(callbackQuery) {
         return;
     }
     
-    // --- TikTok Format Selection ---
     if (action === "tiktok") {
-        const [ttAction, ttUrl] = payload.split("~"); // Use ~ as a separator
+        const [ttAction, ttUrl] = payload.split("~");
         await deleteMessage(privateChatId, message.message_id);
         await startTikTokDownload(privateChatId, userId, ttUrl, ttAction);
         return;
     }
     
-    // --- YouTube Format Selection (Default) ---
     const [format, videoUrl] = data.split("|");
     await deleteMessage(privateChatId, message.message_id);
     await startDownload(privateChatId, userId, videoUrl, format);
@@ -436,51 +401,76 @@ async function spendCredit(chatId, userId) {
         await kv.set(premiumAccessKey, { expires_at: newExpiry });
         user.premium_credits = credits - 1;
         await kv.set(userKey, user);
-        await sendTelegramMessage(chatId, `✅ 1 Premium Credit spent! You now have access to premium features for the next <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b>.`, {});
+        await sendTelegramMessage(chatId, `✅ 1 Premium Credit spent! You now have access for <b>${PREMIUM_ACCESS_DURATION_DAYS} days</b>.`, {});
         return true;
     }
     return false;
 }
 
+/**
+ * NEW FUNCTION: Checks the size of a file from a URL using a HEAD request.
+ * @param {string} url The URL of the file to check.
+ * @returns {Promise<number|null>} The file size in MB, or null if it can't be determined.
+ */
+async function getFileSize(url) {
+    try {
+        const response = await fetch(url, { method: "HEAD" });
+        if (response.ok && response.headers.has("content-length")) {
+            const sizeInBytes = Number(response.headers.get("content-length"));
+            return sizeInBytes / (1024 * 1024); // Return size in MB
+        }
+    } catch (error) {
+        console.error("Could not get file size:", error.message);
+    }
+    return null; // Return null if size can't be determined
+}
+
+// --- UPDATED DOWNLOAD LOGIC ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
     const isUserPremium = await checkPremium(userId);
-    
     if (format === '1080' && !isUserPremium) {
-        if(!(await spendCredit(chatId, userId))) {
-            await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer to see your progress.`, {});
+        if (!(await spendCredit(chatId, userId))) {
+            await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
             return;
         }
     }
-    
+
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing YouTube ${format.toUpperCase()}...`);
-    const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
-    const controller = new AbortController();
-    activeDownloads.set(downloadKey, controller);
-    const cancelBtn = { text: "❌ Cancel", callback_data: `cancel|${downloadKey}` };
     const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
 
     try {
-        if (!isInline) await editMessageText(`🔎 Analyzing link...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
-        
-        const info = await getVideoInfo(videoUrl);
-        const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        if (!isInline) await editMessageText(`⏳ Download in progress...`, { ...editTarget, reply_markup: { inline_keyboard: [[cancelBtn]] } });
+        // --- NEW: Pre-download size check ---
+        if (!isInline) await editMessageText(`🔎 Checking file size...`, editTarget);
+        const fileSizeMB = await getFileSize(downloadUrl);
+
+        if (fileSizeMB && fileSizeMB > MAX_FILE_SIZE_MB) {
+            const messageText = `⚠️ <b>File is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)\n\nPlease use the link below to download it externally.`;
+            if (isInline) {
+                 await editMessageText(messageText, editTarget);
+                 await sendTelegramMessage(chatId, `🔗 <b>External Link:</b> ${downloadUrl}`);
+            } else {
+                 await editMessageText(messageText, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+            }
+            return;
+        }
+
+        // --- Original Download Logic ---
+        const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
+        const controller = new AbortController();
+        activeDownloads.set(downloadKey, controller);
+        
+        if (!isInline) await editMessageText(`⏳ Download in progress...`, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: `cancel|${downloadKey}` }]] } });
 
         const fileRes = await fetch(downloadUrl, { signal: controller.signal });
         if (!fileRes.ok) throw new Error(`Download server failed: ${fileRes.status}.`);
 
-        const fileBlob = await fileRes.blob();
-        if (fileBlob.size / (1024 * 1024) > MAX_FILE_SIZE_MB) {
-             const messageText = `⚠️ <b>File Is Too Large!</b> (${(fileBlob.size / (1024 * 1024)).toFixed(2)} MB)`;
-             if (isInline) await sendTelegramMessage(chatId, messageText);
-             else await editMessageText(messageText, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-             return; 
-        }
-
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
         
+        const fileBlob = await fileRes.blob();
+        const info = await getVideoInfo(videoUrl);
+        const safeTitle = info.title ? info.title.replace(/[^\w\s.-]/g, '_') : `video_${Date.now()}`;
         const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
         const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
         
@@ -497,16 +487,15 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
             else if (statusMsg) await editMessageText(errorMessage, { chat_id: chatId, message_id: statusMsg.result.message_id });
         }
     } finally {
-        activeDownloads.delete(downloadKey);
+        activeDownloads.delete(isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`);
     }
 }
 
 async function startTikTokDownload(chatId, userId, url, format) {
     const isUserPremium = await checkPremium(userId);
-    
     if (format === 'video_hd' && !isUserPremium) {
         if(!(await spendCredit(chatId, userId))) {
-             await sendTelegramMessage(chatId, `⭐ <b>HD Video is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer to see your progress.`, {});
+             await sendTelegramMessage(chatId, `⭐ <b>HD Video is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
             return;
         }
     }
@@ -519,29 +508,33 @@ async function startTikTokDownload(chatId, userId, url, format) {
         if (!apiRes.ok) throw new Error("TikTok API failed.");
         
         const data = await apiRes.json();
-        if (!data.success || !data.download) throw new Error("Could not retrieve download links from TikTok API.");
+        if (!data.success || !data.download) throw new Error("Could not get TikTok info from API.");
 
         const downloadUrl = data.download[format];
-        if (!downloadUrl) throw new Error(`Format "${format}" not available for this TikTok.`);
+        if (!downloadUrl) throw new Error(`Format "${format}" not available.`);
         
+        // --- NEW: Pre-download size check for TikTok ---
+        await editMessageText(`🔎 Checking file size...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
+        const fileSizeMB = await getFileSize(downloadUrl);
+        
+        if (fileSizeMB && fileSizeMB > MAX_FILE_SIZE_MB) {
+            await editMessageText(`⚠️ <b>File is Too Large!</b> (${fileSizeMB.toFixed(2)} MB)`, { chat_id: chatId, message_id: statusMsg.result.message_id, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
+            return;
+        }
+
+        // --- Original Download Logic ---
         await editMessageText(`⏳ Download in progress...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
         
         const fileRes = await fetch(downloadUrl);
         if (!fileRes.ok) throw new Error("Could not download media file from CDN.");
         
-        const fileBlob = await fileRes.blob();
-        if (fileBlob.size / (1024 * 1024) > MAX_FILE_SIZE_MB) {
-             await editMessageText(`⚠️ <b>File Is Too Large!</b> (${(fileBlob.size / (1024 * 1024)).toFixed(2)} MB)`, { chat_id: chatId, message_id: statusMsg.result.message_id, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally`, url: downloadUrl }]] } });
-             return; 
-        }
-
         await deleteMessage(chatId, statusMsg.result.message_id);
 
-        if (format.startsWith('video')) {
-            await sendMedia(chatId, fileBlob, 'video', `📥 Downloaded via @${BOT_USERNAME}`, 'tiktok_video.mp4', data.tiktok_info.title);
-        } else {
-            await sendMedia(chatId, fileBlob, 'audio', `📥 Downloaded via @${BOT_USERNAME}`, 'tiktok_audio.mp3', data.tiktok_info.title);
-        }
+        const fileBlob = await fileRes.blob();
+        const fileType = format.startsWith('video') ? 'video' : 'audio';
+        const fileName = `tiktok_${fileType}.${fileType === 'video' ? 'mp4' : 'mp3'}`;
+        
+        await sendMedia(chatId, fileBlob, fileType, `📥 Downloaded via @${BOT_USERNAME}`, fileName, data.tiktok_info.title);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
     } catch (error) {
@@ -586,10 +579,7 @@ async function handleSettingsCallbacks(callbackQuery) {
     const [action, payload] = data.split("|");
 
     if (action === "settings_menu") { await deleteMessage(chatId, messageId); await sendSettingsMessage(chatId); }
-    else if (action === "get_premium") {
-        await deleteMessage(chatId, messageId);
-        await sendPremiumMemberMessage(chatId);
-    }
+    else if (action === "get_premium") { await deleteMessage(chatId, messageId); await sendPremiumMemberMessage(chatId); }
     else if (action === "settings_quality") {
         const userQuality = (await kv.get(["users", userId, "quality"])).value;
         await editMessageText("Choose your default quality:", { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: await createQualitySettingsButtons(userQuality, userId) } });
@@ -611,29 +601,16 @@ async function handleSettingsCallbacks(callbackQuery) {
         const helpMessage = `📖 <b>Help & FAQ</b>
 
 <b>How to Use This Bot:</b>
-1️⃣ <b>Search for Music/Videos</b>
-Use the <code>/search</code> command followed by a name (e.g., <code>/search shatta wale on god</code>).
-
-2️⃣ <b>Pasting a Link</b>
-Send a valid YouTube or TikTok link directly to me.
-
-3️⃣ <b>Inline Mode (In Any Chat)</b>
-Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
+1️⃣ <b>Search for Music/Videos</b>: Use <code>/search</code> followed by a name.
+2️⃣ <b>Pasting a Link</b>: Send a valid YouTube or TikTok link.
+3️⃣ <b>Inline Mode</b>: Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
 
 ⭐ <b>How to Get Premium Access:</b>
-There are two ways to get premium features:
-
-- <b>Temporary Access:</b> 
-Use /refer to invite friends. For every ${REFERRAL_GOAL} referrals, you get a credit for ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
-- <b>Lifetime Access:</b> 
-Use /premium_member or /donate to make a one-time donation for permanent premium access. This also includes access to the /premium_hub for exclusive content.
+- <b>Temporary:</b> Use /refer. For every ${REFERRAL_GOAL} referrals, you get ${PREMIUM_ACCESS_DURATION_DAYS} days of premium.
+- <b>Lifetime:</b> Use /premium_member or /donate for permanent access and the /premium_hub.
 
 ⚙️ <b>Other Commands</b>
-
-/settings - Manage your preferences
-/refer - Get your referral link
-/feedback - Send a bug reports to admin
-/cancel - Cancel the current operation`;
+/settings, /refer, /feedback, /cancel`;
         await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
     await answerCallbackQuery(callbackQuery.id);
@@ -708,7 +685,6 @@ async function createTikTokFormatButtons(url, userId) {
     return [buttons];
 }
 
-
 async function createInlineFormatButtons(videoId, userId) {
     return createFormatButtons(`https://youtu.be/${videoId}`, userId);
 }
@@ -725,7 +701,7 @@ async function getVideoInfo(youtubeUrl) {
     }
 }
 
-// --- Telegram API Helpers ---
+// --- Telegram API Helpers (Exported for use in other modules) ---
 export async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
@@ -757,7 +733,6 @@ export async function editMessageText(text, extra = {}) { return await apiReques
 export async function deleteMessage(chatId, messageId) { return await apiRequest('deleteMessage', { chat_id: chatId, message_id: messageId }); }
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
-
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v68 - Modular Premium Hub)...");
+console.log("Starting Adiza All-In-One Downloader (v69 - Size Check Fixed)...");
 Deno.serve(handler);
