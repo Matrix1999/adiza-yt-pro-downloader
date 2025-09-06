@@ -235,7 +235,6 @@ async function handleBroadcast(message) {
     await sendTelegramMessage(message.chat.id, `✅ **Broadcast Complete!**\nSuccessfully sent to ${successCount} out of ${users.length} users.`);
 }
 
-
 // --- YouTube Search for Inline Mode ---
 async function searchYoutube(query) {
     try {
@@ -324,7 +323,6 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
-// --- FIX 2: Corrected Inline Format Buttons to show ALL formats ---
 function createInlineFormatButtons(videoId) {
     const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
     const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
@@ -379,38 +377,53 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
-// --- FIX 1: Corrected sendMedia function for proper MP3 handling ---
+// --- FINAL FIX: Complete rewrite of sendMedia for proper MP3 handling ---
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
+    if (type === 'audio') {
+        // For audio files, use a specialized function to ensure proper MP3 handling
+        await sendAudioFile(chatId, blob, fileName, title, caption);
+    } else {
+        // For video files, use the original logic
+        const formData = new FormData();
+        formData.append('chat_id', String(chatId));
+        formData.append('caption', caption);
+        
+        const videoFile = new File([blob], fileName, { type: "video/mp4" });
+        formData.append('video', videoFile);
+        
+        const inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
+        formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
+        
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`;
+        await fetch(url, { method: 'POST', body: formData });
+    }
+}
+
+// --- NEW: Dedicated function for sending audio files ---
+async function sendAudioFile(chatId, audioBlob, fileName, title, caption) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
     formData.append('caption', caption);
-
-    // This is the critical fix. We create a new `File` object from the downloaded
-    // data (blob) and explicitly set its `type`. This forces Telegram to
-    // recognize it as a proper audio file, not a video.
-    if (type === 'audio') {
-        const audioFile = new File([blob], fileName, { type: "audio/mpeg" });
-        formData.append('audio', audioFile);
-    } else {
-        const videoFile = new File([blob], fileName, { type: "video/mp4" });
-        formData.append('video', videoFile);
-    }
     
+    // Create the audio file with explicit MIME type
+    const audioFile = new File([audioBlob], fileName, { type: "audio/mpeg" });
+    formData.append('audio', audioFile);
+    
+    // Add audio metadata
+    formData.append('title', title || 'Unknown Title');
+    formData.append('performer', `Via @${BOT_USERNAME}`);
+    formData.append('duration', '0'); // Telegram will auto-detect this
+    
+    // Add inline keyboard
     let inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
-    if (type === 'audio' && title) {
+    if (title) {
         const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
     }
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
     
-    if (type === 'audio') {
-        formData.append('title', title || 'Unknown Title');
-        formData.append('performer', `Via @${BOT_USERNAME}`);
-    }
-    
-    // Determine the correct Telegram API endpoint (/sendAudio or /sendVideo)
-    const endpoint = type === 'audio' ? 'sendAudio' : 'sendVideo';
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`;
+    // Send using the sendAudio endpoint
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendAudio`;
     await fetch(url, { method: 'POST', body: formData });
 }
 
@@ -432,5 +445,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v35 - Definitive MP3 Fix)...");
+console.log("Starting final professional bot server (v36 - True MP3 Audio Fix)...");
 Deno.serve(handler);
