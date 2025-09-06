@@ -276,13 +276,10 @@ async function startDownload(chatId, userId, videoUrl, format) {
         const fileBlob = await fileRes.blob();
         await editMessageText(`✅ Uploading to you...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
         
-        // <<< START OF THE FIX >>>
-        // This logic is restored from your old, working code to ensure MP3s are handled correctly.
         const fileType = format.toLowerCase() === 'mp3' ? 'audio' : 'video';
-        // The filename must end with .mp3 for audio, and .mp4 for video.
-        const fileName = `${safeTitle}.${fileType === 'audio' ? 'mp3' : 'mp4'}`;
-        // <<< END OF THE FIX >>>
-
+        const fileExtension = format.toLowerCase() === 'mp3' ? 'mp3' : 'mp4';
+        const fileName = `${safeTitle}.${fileExtension}`;
+        
         await sendMedia(chatId, fileBlob, fileType, `📥 Adiza-YT Bot`, fileName, info.title);
         await deleteMessage(chatId, statusMsg.result.message_id);
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
@@ -327,7 +324,7 @@ function createQualitySettingsButtons(currentQuality) {
     return rows;
 }
 
-// --- FIX 2: Updated Helper for Inline Format Buttons (ALL FORMATS) ---
+// --- FIX 2: Corrected Inline Format Buttons to show ALL formats ---
 function createInlineFormatButtons(videoId) {
     const formats = ['mp3', '144', '240', '360', '480', '720', '1080'];
     const formatLabels = { 'mp3': 'MP3', '144': '144p', '240': '240p', '360': '360p', '480': '480p', '720': '720p', '1080': '1080p' };
@@ -382,22 +379,38 @@ async function answerCallbackQuery(callbackQueryId, text) {
   return await apiRequest('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
 }
 
+// --- FIX 1: Corrected sendMedia function for proper MP3 handling ---
 async function sendMedia(chatId, blob, type, caption, fileName, title) {
     const formData = new FormData();
     formData.append('chat_id', String(chatId));
-    formData.append(type, blob, fileName);
     formData.append('caption', caption);
+
+    // This is the critical fix. We create a new `File` object from the downloaded
+    // data (blob) and explicitly set its `type`. This forces Telegram to
+    // recognize it as a proper audio file, not a video.
+    if (type === 'audio') {
+        const audioFile = new File([blob], fileName, { type: "audio/mpeg" });
+        formData.append('audio', audioFile);
+    } else {
+        const videoFile = new File([blob], fileName, { type: "video/mp4" });
+        formData.append('video', videoFile);
+    }
+    
     let inline_keyboard = [[{ text: "Share ↪️", switch_inline_query: "" }, { text: "🔮 More Bots 🔮", url: CHANNEL_URL }]];
     if (type === 'audio' && title) {
         const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title)}`;
         inline_keyboard.unshift([{ text: "🎵 Find on Spotify", url: spotifyUrl }]);
     }
     formData.append('reply_markup', JSON.stringify({ inline_keyboard }));
+    
     if (type === 'audio') {
         formData.append('title', title || 'Unknown Title');
         formData.append('performer', `Via @${BOT_USERNAME}`);
     }
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    
+    // Determine the correct Telegram API endpoint (/sendAudio or /sendVideo)
+    const endpoint = type === 'audio' ? 'sendAudio' : 'sendVideo';
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`;
     await fetch(url, { method: 'POST', body: formData });
 }
 
@@ -419,5 +432,5 @@ function createFormatButtons(videoUrl) {
 }
 
 // --- Server Start ---
-console.log("Starting final professional bot server (v34 - Final Fix)...");
+console.log("Starting final professional bot server (v35 - Definitive MP3 Fix)...");
 Deno.serve(handler);
