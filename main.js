@@ -11,6 +11,8 @@ const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 // --- Deno KV Database ---
 const kv = await Deno.openKv();
 
+//  --unstable-kv   <<< add this on the argument tab @ settings -- build configuration
+
 // --- Array of Welcome Sticker File IDs ---
 const WELCOME_STICKER_IDS = [
     "CAACAgIAAxkBAAE6q6Vou5NXUTp2vrra9Rxf0LPiUgcuXwACRzkAAl5WcUpWHeyfrD_F3jYE", "CAACAgIAAxkBAAE6q6Nou5NDyKtMXVG-sxOPQ_hZlvuaQAACCwEAAlKJkSNKMfbkP3tfNTYE",
