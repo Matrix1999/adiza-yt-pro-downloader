@@ -47,7 +47,7 @@ async function handler(req) {
 // --- Helper: Delay Function ---
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// --- Logic Handlers (Final Version with all Features) ---
+// --- Logic Handlers (Final Corrected Version) ---
 async function handleMessage(message) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
@@ -64,14 +64,16 @@ async function handleMessage(message) {
         return;
     }
 
-    if (userId === ADMIN_ID) {
-        if (text.startsWith("/broadcast ")) { await handleBroadcast(message); return; }
-        if (text.startsWith("/grant_premium ")) { await grantPremiumAccess(message); return; }
-    }
-
     const [command, ...args] = text.split(" ");
     const payload = args.join(" ");
 
+    // --- Admin Commands ---
+    if (userId === ADMIN_ID) {
+        if (command === "/broadcast") { await handleBroadcast(message, payload); return; }
+        if (command === "/grant_premium") { await grantPremiumAccess(message, payload); return; }
+    }
+
+    // --- User Commands ---
     switch (command) {
         case "/start":
             await handleStart(message, args[0]);
@@ -154,7 +156,7 @@ async function handleStart(message, referrerId) {
 <b>Status:</b> ${userStatus}
 
 Welcome to Adiza YouTube Downloader! 🌹
-Check /settings to see all commands.
+Use /help to see all commands.
     `;
     const inline_keyboard = [
         [{ text: "🔮 Channel 🔮", url: CHANNEL_URL }],
@@ -164,7 +166,7 @@ Check /settings to see all commands.
     await sendPhoto(chatId, START_PHOTO_URL, welcomeMessage.trim(), { reply_markup: { inline_keyboard } });
 }
 
-async function handleSearch(chatId, query, userId) {
+async function handleSearch(chatId, query) {
     await sendTelegramMessage(chatId, `🔍 Searching for: <b>${query}</b>...`);
     const searchResults = await searchYoutube(query);
     if (!searchResults || searchResults.length === 0) {
@@ -221,8 +223,8 @@ async function handleFeedbackSubmission(message) {
     userState.delete(userId);
 }
 
-async function grantPremiumAccess(message) {
-    const targetId = parseInt(message.text.split(" ")[1]);
+async function grantPremiumAccess(message, payload) {
+    const targetId = parseInt(payload);
     if (isNaN(targetId)) {
         await sendTelegramMessage(message.chat.id, "Invalid User ID. Usage: /grant_premium USER_ID");
         return;
@@ -238,9 +240,8 @@ async function grantPremiumAccess(message) {
     await sendTelegramMessage(targetId, "🎉 Congratulations! You have been granted lifetime <b>Premium Access</b> by the admin! You can now download in 1080p quality anytime.", {});
 }
 
-async function handleBroadcast(message) {
-    const textToBroadcast = message.text.substring(message.text.indexOf(" ") + 1);
-    if (!textToBroadcast || textToBroadcast === "/broadcast") {
+async function handleBroadcast(message, payload) {
+    if (!payload) {
         await sendTelegramMessage(message.chat.id, "⚠️ Please provide a message to broadcast.");
         return;
     }
@@ -252,7 +253,7 @@ async function handleBroadcast(message) {
     let successCount = 0;
     for (const userId of users) {
         try {
-            await sendTelegramMessage(userId, textToBroadcast, {});
+            await sendTelegramMessage(userId, payload, {});
             successCount++;
         } catch (e) {
             console.error(`Broadcast failed for user ${userId}:`, e.message);
@@ -396,8 +397,31 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
 
 
 // --- Other Handlers & UI Functions ---
-async function handleInlineQuery(inlineQuery) { /* ... implementation ... */ }
-async function searchYoutube(query) { /* ... implementation ... */ }
+async function handleInlineQuery(inlineQuery) {
+    const query = inlineQuery.query.trim();
+    if (!query) return;
+    const searchResults = await searchYoutube(query);
+    const results = searchResults.map(video => ({
+        type: 'article',
+        id: video.id,
+        title: video.title,
+        description: `Duration: ${video.length.simpleText}`,
+        thumb_url: video.thumbnail.url,
+        input_message_content: { message_text: `🎨𝗬𝗼𝘂 𝘀𝗲𝗹𝗲𝗰𝘁𝗲𝗱: ${video.title}` },
+        reply_markup: { inline_keyboard: [[{ text: "👉 Choose Format", callback_data: `formats|${video.id}` }]] }
+    }));
+    await apiRequest('answerInlineQuery', { inline_query_id: inlineQuery.id, results: JSON.stringify(results), cache_time: 300 });
+}
+
+async function searchYoutube(query) {
+    try {
+        const response = await YouTube.GetListByKeyword(query, false, 15, [{type: 'video'}]);
+        return response.items || [];
+    } catch (error) {
+        console.error("YouTube search error:", error);
+        return [];
+    }
+}
 
 async function handleSettingsCallbacks(callbackQuery) {
     const { data, message, from } = callbackQuery;
@@ -444,7 +468,11 @@ Type <code>@${BOT_USERNAME}</code> and a search term in any chat.
 ⭐ <b>Premium Access</b>
 Download in 1080p quality by referring friends or donating. Use /refer to see your progress.
 
-⚙️ Use /settings, /refer, or /feedback for more options.`;
+⚙️ <b>Other Commands</b>
+/settings - Manage your preferences
+/refer - Get your referral link
+/feedback - Send a message to the admin
+/cancel - Cancel the current operation`;
         await editMessageText(helpMessage, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "back_to_settings" }]] } });
     }
     await answerCallbackQuery(callbackQuery.id);
@@ -565,5 +593,5 @@ async function deleteMessage(chatId, messageId) { return await apiRequest('delet
 async function answerCallbackQuery(id, text) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text }); }
 
 // --- Server Start ---
-console.log("Starting Adiza Downloader Bot (v59 - Final Full Version)...");
+console.log("Starting Adiza Downloader Bot (v60 - Final Corrected Version)...");
 Deno.serve(handler);
