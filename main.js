@@ -384,30 +384,16 @@ async function handleCallbackQuery(callbackQuery) {
 
 
 // --- Premium System Helpers ---
-
-// FIXED: This function now correctly checks for both permanent and temporary (expiring) premium status.
 export async function checkPremium(userId) {
     if (userId === ADMIN_ID) return true;
-
-    // 1. Check for permanent premium (from donation)
     const userKey = ["users", userId];
     const user = (await kv.get(userKey)).value || {};
-    if (user.is_permanent_premium) {
-        return true;
-    }
-
-    // 2. Check for temporary premium (from referral credits)
+    if (user.is_permanent_premium) return true;
     const premiumAccessKey = ["premium_access", userId];
     const premiumInfo = (await kv.get(premiumAccessKey)).value || {};
-    if (premiumInfo.expires_at && premiumInfo.expires_at > Date.now()) {
-        return true;
-    }
-    
-    // If neither check passes, the user is not premium.
-    return false;
+    return premiumInfo.expires_at && premiumInfo.expires_at > Date.now();
 }
 
-// This function now correctly extends an existing premium subscription.
 async function spendCredit(chatId, userId) {
     const userKey = ["users", userId];
     const user = (await kv.get(userKey)).value;
@@ -419,12 +405,10 @@ async function spendCredit(chatId, userId) {
     const premiumInfo = (await kv.get(premiumAccessKey)).value || { expires_at: 0 };
     
     const now = Date.now();
-    // Start premium from now if expired, otherwise add to the existing expiry date.
     const startTime = premiumInfo.expires_at > now ? premiumInfo.expires_at : now;
     const newExpiry = startTime + (PREMIUM_ACCESS_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
     await kv.set(premiumAccessKey, { expires_at: newExpiry });
-    
     user.premium_credits -= 1;
     await kv.set(userKey, user);
     
@@ -446,36 +430,43 @@ async function getFileSize(url) {
         }
     } catch (error) {
         clearTimeout(timeoutId);
-        if (error.name !== 'AbortError') {
-             console.error("Could not get file size:", error.message);
-        }
+        if (error.name !== 'AbortError') console.error("Could not get file size:", error.message);
     }
     return null;
 }
 
 // --- Download Logic ---
 async function startDownload(chatId, userId, videoUrl, format, isInline = false, inlineMessageId = null) {
-    // Check for premium status at the start.
     let isUserPremium = await checkPremium(userId);
 
-    // If the format is premium and the user is not, try to spend a credit.
-    if (format === '1080' && !isUserPremium) {
-        const creditSpent = await spendCredit(chatId, userId);
-        if (creditSpent) {
-            isUserPremium = true; // They are now premium, proceed with the download.
-        } else {
-            // No credits to spend, inform the user and stop.
-            await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
-            return;
+    // --- NEW: Special handling for 1080p ---
+    if (format === '1080') {
+        if (!isUserPremium) {
+            const creditSpent = await spendCredit(chatId, userId);
+            if (!creditSpent) {
+                await sendTelegramMessage(chatId, `⭐ <b>1080p is a Premium Feature!</b>\n\nTo unlock it, refer friends or donate. Use /refer.`, {});
+                return;
+            }
         }
+        const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Preparing 1080p link...`);
+        const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
+        const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=1080`;
+        const messageText = `⚠️ **1080p videos are always sent as a link.**\n\nPlease use the button below to download the file externally to avoid server timeouts.`;
+        if (isInline) {
+            await editMessageText(messageText, editTarget);
+            await sendTelegramMessage(chatId, `🔗 <b>External Link:</b> ${downloadUrl}`);
+        } else {
+            await editMessageText(messageText, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: `🔗 Download Externally (1080p)`, url: downloadUrl }]] } });
+        }
+        return; // Exit function immediately for 1080p
     }
 
+    // --- Logic for all other formats ---
     const statusMsg = isInline ? null : await sendTelegramMessage(chatId, `⏳ Processing YouTube ${format.toUpperCase()}...`);
     const editTarget = isInline ? { inline_message_id: inlineMessageId } : { chat_id: chatId, message_id: statusMsg.result.message_id };
 
     try {
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
-        
         if (!isInline) await editMessageText(`🔎 Checking file size...`, editTarget);
         const fileSizeMB = await getFileSize(downloadUrl);
 
@@ -781,5 +772,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v71 - Premium Logic Fixed)...");
+console.log("Starting Adiza All-In-One Downloader (v72 - 1080p External Link)...");
 Deno.serve(handler);
