@@ -13,11 +13,12 @@ const WELCOME_PHOTO_URLS = [
 export const OWNER_URL = "https://t.me/Matrixxxxxxxxx";
 const CHANNEL_URL = "https://whatsapp.com/channel/0029Vb5JJ438kyyGlFHTyZ0n";
 const BOT_USERNAME = "adiza_ytdownloader_bot";
-const MAX_FILE_SIZE_MB = 30; // UPDATED to 30MB as requested
+const MAX_FILE_SIZE_MB = 40; // UPDATED to 40MB as requested
 const DONATE_URL = "https://paystack.com/pay/adiza-bot-donate";
 const ADMIN_ID = 853645999;
 const REFERRAL_GOAL = 2; // Refer 2 users to get 1 credit
 const PREMIUM_ACCESS_DURATION_DAYS = 7; // 1 credit = 7 days of access
+const FETCH_TIMEOUT_MS = 30000; // 30 seconds timeout for fetch requests
 
 // --- External Libraries ---
 import YouTube from "https://esm.sh/youtube-search-api@1.2.1";
@@ -408,21 +409,28 @@ async function spendCredit(chatId, userId) {
 }
 
 /**
- * NEW FUNCTION: Checks the size of a file from a URL using a HEAD request.
+ * Checks the size of a file from a URL using a HEAD request.
  * @param {string} url The URL of the file to check.
  * @returns {Promise<number|null>} The file size in MB, or null if it can't be determined.
  */
 async function getFileSize(url) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS / 2); // Shorter timeout for just getting size
+
     try {
-        const response = await fetch(url, { method: "HEAD" });
+        const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+        clearTimeout(timeoutId);
         if (response.ok && response.headers.has("content-length")) {
             const sizeInBytes = Number(response.headers.get("content-length"));
             return sizeInBytes / (1024 * 1024); // Return size in MB
         }
     } catch (error) {
-        console.error("Could not get file size:", error.message);
+        clearTimeout(timeoutId);
+        if (error.name !== 'AbortError') {
+             console.error("Could not get file size:", error.message);
+        }
     }
-    return null; // Return null if size can't be determined
+    return null; // Return null if size can't be determined or request timed out
 }
 
 // --- UPDATED DOWNLOAD LOGIC ---
@@ -441,7 +449,6 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
     try {
         const downloadUrl = `${YOUR_API_BASE_URL}/?url=${encodeURIComponent(videoUrl)}&format=${format}`;
         
-        // --- NEW: Pre-download size check ---
         if (!isInline) await editMessageText(`🔎 Checking file size...`, editTarget);
         const fileSizeMB = await getFileSize(downloadUrl);
 
@@ -456,14 +463,15 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
             return;
         }
 
-        // --- Original Download Logic ---
         const downloadKey = isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`;
-        const controller = new AbortController();
-        activeDownloads.set(downloadKey, controller);
+        const mainController = new AbortController();
+        const timeoutId = setTimeout(() => mainController.abort(), FETCH_TIMEOUT_MS);
+        activeDownloads.set(downloadKey, mainController);
         
         if (!isInline) await editMessageText(`⏳ Download in progress...`, { ...editTarget, reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: `cancel|${downloadKey}` }]] } });
 
-        const fileRes = await fetch(downloadUrl, { signal: controller.signal });
+        const fileRes = await fetch(downloadUrl, { signal: mainController.signal });
+        clearTimeout(timeoutId);
         if (!fileRes.ok) throw new Error(`Download server failed: ${fileRes.status}.`);
 
         if (!isInline) await editMessageText(`✅ Uploading to you...`, editTarget);
@@ -485,6 +493,8 @@ async function startDownload(chatId, userId, videoUrl, format, isInline = false,
             const errorMessage = `❌ Sorry, an error occurred:\n\n<i>${error.message}</i>`;
             if (isInline) await sendTelegramMessage(chatId, errorMessage);
             else if (statusMsg) await editMessageText(errorMessage, { chat_id: chatId, message_id: statusMsg.result.message_id });
+        } else {
+             if (statusMsg && !isInline) await editMessageText("❌ Download timed out.", editTarget);
         }
     } finally {
         activeDownloads.delete(isInline ? inlineMessageId : `${chatId}:${statusMsg.result.message_id}`);
@@ -513,7 +523,6 @@ async function startTikTokDownload(chatId, userId, url, format) {
         const downloadUrl = data.download[format];
         if (!downloadUrl) throw new Error(`Format "${format}" not available.`);
         
-        // --- NEW: Pre-download size check for TikTok ---
         await editMessageText(`🔎 Checking file size...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
         const fileSizeMB = await getFileSize(downloadUrl);
         
@@ -522,10 +531,13 @@ async function startTikTokDownload(chatId, userId, url, format) {
             return;
         }
 
-        // --- Original Download Logic ---
+        const mainController = new AbortController();
+        const timeoutId = setTimeout(() => mainController.abort(), FETCH_TIMEOUT_MS);
+        
         await editMessageText(`⏳ Download in progress...`, { chat_id: chatId, message_id: statusMsg.result.message_id });
         
-        const fileRes = await fetch(downloadUrl);
+        const fileRes = await fetch(downloadUrl, {signal: mainController.signal});
+        clearTimeout(timeoutId);
         if (!fileRes.ok) throw new Error("Could not download media file from CDN.");
         
         await deleteMessage(chatId, statusMsg.result.message_id);
@@ -538,8 +550,12 @@ async function startTikTokDownload(chatId, userId, url, format) {
         await kv.atomic().sum(["users", userId, "downloads"], 1n).commit();
 
     } catch (error) {
-        console.error("TikTok Download Error:", error);
-        await editMessageText(`❌ Error downloading TikTok: ${error.message}`, { chat_id: chatId, message_id: statusMsg.result.message_id });
+        if (error.name !== 'AbortError') {
+            console.error("TikTok Download Error:", error);
+            await editMessageText(`❌ Error downloading TikTok: ${error.message}`, { chat_id: chatId, message_id: statusMsg.result.message_id });
+        } else {
+             await editMessageText("❌ Download timed out.", { chat_id: chatId, message_id: statusMsg.result.message_id });
+        }
     }
 }
 
@@ -734,5 +750,5 @@ export async function deleteMessage(chatId, messageId) { return await apiRequest
 export async function answerCallbackQuery(id, text, showAlert = false) { return await apiRequest('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert }); }
 
 // --- Server Start ---
-console.log("Starting Adiza All-In-One Downloader (v69 - Size Check Fixed)...");
+console.log("Starting Adiza All-In-One Downloader (v70 - Final Size Check)...");
 Deno.serve(handler);
